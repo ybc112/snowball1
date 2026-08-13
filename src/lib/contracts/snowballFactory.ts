@@ -1,0 +1,352 @@
+import { ethers, type BrowserProvider, type Contract, type Signer } from "ethers";
+
+let _bananaTokenBytecode: string | null = null;
+
+async function getBananaTokenBytecode(): Promise<string> {
+  if (_bananaTokenBytecode) return _bananaTokenBytecode;
+  const res = await fetch("/artifacts/BananaToken.json");
+  const artifact = await res.json();
+  _bananaTokenBytecode = artifact.bytecode as string;
+  return _bananaTokenBytecode;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 链配置（BSC 主网）
+// ─────────────────────────────────────────────────────────────────────────────
+export const CHAIN_ID = 56;
+
+export const RPCS = [
+  "https://bsc-dataseed.binance.org/",
+  "https://bsc-dataseed1.defibit.io/",
+  "https://bsc-dataseed1.ninicoin.io/",
+  "https://bsc-dataseed2.defibit.io/",
+  "https://bsc-dataseed3.defibit.io/",
+  "https://bsc-dataseed4.defibit.io/",
+  "https://bsc.drpc.org",
+];
+
+export const ADDRESSES = {
+  router: "0x10ED43C718714eb63d5aA57B78B54704E256024E",
+  wbnb: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+  usdt: "0x55d398326f99059fF775485246999027B3197955",
+  lpBlackHole: "0x000000000000000000000000000000000000dEaD",
+};
+
+export const FACTORY_ADDRESS =
+  import.meta.env.VITE_SNOWBALL_FACTORY_ADDRESS || "";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TokenFactory ABI（对齐 flap-vault-ai-coder/contracts/tokenfactory/TokenFactory.sol）
+// ─────────────────────────────────────────────────────────────────────────────
+export const FACTORY_ABI = [
+  // struct
+  "struct LaunchParams { string name; string symbol; uint256 totalSupply; address receiver; address fundAddress; address rewardToken; address currency; uint256 totalBuyTax; uint256 totalSellTax; uint256 rewardShare; uint256 liquidityShare; uint256 burnShare; uint256 fundShare; uint256 maxBuyAmount; uint256 maxSellAmount; uint256 maxWalletAmount; uint256 secondTime; uint256 killBlocks; uint256 airdropNumbs; uint256 transferFee; uint256 mushHoldNum; uint256 lpBurnFrequency; uint256 percentForLPBurn; bool enableOffTrade; }",
+  // write
+  "function createToken(LaunchParams calldata params, bytes32 salt) external payable returns (address token)",
+  "function createTokenAndAddLiquidity(LaunchParams calldata params, bytes32 salt, uint256 addLiquidityTokens, uint256 addLiquidityEth) external payable returns (address token)",
+  // read / preview
+  "function previewFees(uint256 totalBuyTax, uint256 totalSellTax, uint256 rewardShare, uint256 liquidityShare, uint256 burnShare, uint256 fundShare) external pure returns (tuple(uint256 platformFee,uint256 rewardFee,uint256 liquidityFee,uint256 burnFee,uint256 fundFee) buy, tuple(uint256 platformFee,uint256 rewardFee,uint256 liquidityFee,uint256 burnFee,uint256 fundFee) sell)",
+  "function buildParams(LaunchParams calldata params, bool withLiquidity) external view returns (string[] memory, address[] memory, uint256[] memory, bool[] memory)",
+  "function createFee() external view returns (uint256)",
+  "function feeRecipient() external view returns (address)",
+  "function router() external view returns (address)",
+  "function dividendTrackerImpl() external view returns (address)",
+  "function tokenDeployer() external view returns (address)",
+  "function owner() external view returns (address)",
+  "function requiredTokenSuffix() external view returns (uint256)",
+  "function allTokensLength() external view returns (uint256)",
+  "function allTokens(uint256 index) external view returns (address)",
+  // events
+  "event TokenCreated(address indexed creator, address indexed token, string name, string symbol, uint256 totalSupply, uint256 buyRewardFee, uint256 buyLiquidityFee, uint256 buyBurnFee, uint256 buyFundFee, uint256 sellRewardFee, uint256 sellLiquidityFee, uint256 sellBurnFee, uint256 sellFundFee, uint256 maxBuyAmount, uint256 maxSellAmount, uint256 maxWalletAmount, uint256 lpBurnFrequency, uint256 percentForLPBurn, bool addLiquidity)",
+  "event CreationFeeUpdated(uint256 creationFee)",
+  "event FeeRecipientUpdated(address indexed feeRecipient)",
+  // errors
+  "error InvalidParams()",
+  "error InvalidFee()",
+  "error InvalidTokenSuffix(address token, uint16 requiredSuffix)",
+  "error ZeroAddress()",
+  "error TokenTransferFailed()",
+];
+
+export const BANANA_TOKEN_ABI = [
+  "function balanceOf(address account) external view returns (uint256)",
+  "function approve(address spender, uint256 amount) external returns (bool)",
+  "function decimals() external view returns (uint8)",
+  "function name() external view returns (string memory)",
+  "function symbol() external view returns (string memory)",
+  "function totalSupply() external view returns (uint256)",
+  "function owner() external view returns (address)",
+  "function _mainPair() external view returns (address)",
+  "function launch() external",
+  "function transferOwnership(address newOwner) external",
+  "event Transfer(address indexed from, address indexed to, uint256 value)",
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 类型
+// ─────────────────────────────────────────────────────────────────────────────
+export interface SnowballParams {
+  name: string;
+  symbol: string;
+  totalSupply: string;
+  currency: string;
+  rewardToken: string;
+  receiver: string;
+  fundAddress: string;
+  totalBuyTax: number;
+  totalSellTax: number;
+  rewardShare: number;
+  liquidityShare: number;
+  burnShare: number;
+  fundShare: number;
+  maxBuyAmount: string;
+  maxSellAmount: string;
+  maxWalletAmount: string;
+  secondTime: number;
+  killBlocks: number;
+  airdropNumbs: number;
+  transferFee: number;
+  mushHoldNum: string;
+  lpBurnFrequency: number;
+  percentForLPBurn: number;
+  enableOffTrade: boolean;
+}
+
+export interface FeeBreakdown {
+  platformFee: number;
+  rewardFee: number;
+  liquidityFee: number;
+  burnFee: number;
+  fundFee: number;
+}
+
+export interface BuiltParams {
+  stringParams: string[];
+  addressParams: string[];
+  numberParams: string[];
+  boolParams: boolean[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// provider 工厂
+// ─────────────────────────────────────────────────────────────────────────────
+export function getReadProvider() {
+  const providers = RPCS.map((url) => new ethers.JsonRpcProvider(url, CHAIN_ID));
+  return new ethers.FallbackProvider(providers, CHAIN_ID);
+}
+
+export function getFactoryContract(signerOrProvider: BrowserProvider | Signer | ethers.Provider = getReadProvider()) {
+  if (!FACTORY_ADDRESS) throw new Error("VITE_SNOWBALL_FACTORY_ADDRESS 未配置");
+  return new ethers.Contract(FACTORY_ADDRESS, FACTORY_ABI, signerOrProvider);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 参数构建（完全对齐合约 LaunchParams）
+// ─────────────────────────────────────────────────────────────────────────────
+function unlimitedIfZero(value: string): bigint {
+  const v = value.trim();
+  if (!v || v === "0") return ethers.MaxUint256;
+  return ethers.parseUnits(v, 18);
+}
+
+export function buildLaunchParams(p: SnowballParams): any {
+  return {
+    name: p.name,
+    symbol: p.symbol,
+    totalSupply: ethers.parseUnits(p.totalSupply || "0", 18),
+    receiver: p.receiver,
+    fundAddress: p.fundAddress || ethers.ZeroAddress,
+    rewardToken: p.rewardToken || ADDRESSES.usdt,
+    currency: p.currency || ADDRESSES.wbnb,
+    totalBuyTax: BigInt(p.totalBuyTax),
+    totalSellTax: BigInt(p.totalSellTax),
+    rewardShare: BigInt(p.rewardShare),
+    liquidityShare: BigInt(p.liquidityShare),
+    burnShare: BigInt(p.burnShare),
+    fundShare: BigInt(p.fundShare),
+    maxBuyAmount: unlimitedIfZero(p.maxBuyAmount),
+    maxSellAmount: unlimitedIfZero(p.maxSellAmount),
+    maxWalletAmount: unlimitedIfZero(p.maxWalletAmount),
+    secondTime: BigInt(p.secondTime || 0),
+    killBlocks: BigInt(p.killBlocks || 0),
+    airdropNumbs: BigInt(p.airdropNumbs || 0),
+    transferFee: BigInt(p.transferFee || 0),
+    mushHoldNum: ethers.parseUnits(p.mushHoldNum || "0", 18),
+    lpBurnFrequency: BigInt(p.lpBurnFrequency || 3600),
+    percentForLPBurn: BigInt(p.percentForLPBurn || 50),
+    enableOffTrade: p.enableOffTrade,
+  };
+}
+
+export async function previewFees(p: SnowballParams): Promise<{ buy: FeeBreakdown; sell: FeeBreakdown }> {
+  const factory = getFactoryContract();
+  const [buy, sell] = await factory.previewFees(
+    p.totalBuyTax,
+    p.totalSellTax,
+    p.rewardShare,
+    p.liquidityShare,
+    p.burnShare,
+    p.fundShare
+  );
+  return {
+    buy: {
+      platformFee: Number(buy.platformFee),
+      rewardFee: Number(buy.rewardFee),
+      liquidityFee: Number(buy.liquidityFee),
+      burnFee: Number(buy.burnFee),
+      fundFee: Number(buy.fundFee),
+    },
+    sell: {
+      platformFee: Number(sell.platformFee),
+      rewardFee: Number(sell.rewardFee),
+      liquidityFee: Number(sell.liquidityFee),
+      burnFee: Number(sell.burnFee),
+      fundFee: Number(sell.fundFee),
+    },
+  };
+}
+
+export async function buildContractParams(p: SnowballParams, withLiquidity: boolean): Promise<BuiltParams> {
+  const factory = getFactoryContract();
+  const launchParams = buildLaunchParams(p);
+  const [stringParams, addressParams, numberParams, boolParams] = await factory.buildParams(launchParams, withLiquidity);
+  return {
+    stringParams: stringParams as string[],
+    addressParams: addressParams as string[],
+    numberParams: numberParams.map((n: any) => n.toString()),
+    boolParams: boolParams as boolean[],
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 离线地址预测 + 靓号挖盐
+// ─────────────────────────────────────────────────────────────────────────────
+async function getDeployerAddress(factory: Contract): Promise<string> {
+  return factory.tokenDeployer();
+}
+
+export async function computeTokenAddress(
+  factory: Contract,
+  params: BuiltParams,
+  salt: string
+): Promise<string> {
+  const deployerAddr = await getDeployerAddress(factory);
+  const abiCoder = ethers.AbiCoder.defaultAbiCoder();
+  const encoded = abiCoder.encode(
+    ["string[]", "address[]", "uint256[]", "bool[]", "uint256[]"],
+    [params.stringParams, params.addressParams, params.numberParams, params.boolParams, []]
+  );
+  const bytecode = (await getBananaTokenBytecode()) + encoded.slice(2);
+  const initHash = ethers.keccak256(bytecode);
+  return ethers.getCreate2Address(deployerAddr, salt, initHash);
+}
+
+export function addressSuffixMatches(addr: string, suffix: string): boolean {
+  if (!suffix) return true;
+  return addr.toLowerCase().endsWith(suffix.toLowerCase());
+}
+
+export async function mineSalt(
+  factory: Contract,
+  params: BuiltParams,
+  targetSuffix: string,
+  onProgress?: (tried: number, addr: string) => void,
+  abortSignal?: AbortSignal
+): Promise<{ salt: string; address: string; attempts: number }> {
+  if (!targetSuffix) {
+    const salt = ethers.hexlify(ethers.randomBytes(32));
+    const address = await computeTokenAddress(factory, params, salt);
+    return { salt, address, attempts: 1 };
+  }
+
+  let attempts = 0;
+  while (true) {
+    if (abortSignal?.aborted) throw new Error("已取消挖盐");
+    const salt = ethers.hexlify(ethers.randomBytes(32));
+    const address = await computeTokenAddress(factory, params, salt);
+    attempts++;
+    if (attempts % 100 === 0) onProgress?.(attempts, address);
+    if (address.toLowerCase().endsWith(targetSuffix.toLowerCase())) {
+      return { salt, address, attempts };
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 写操作：创建代币
+// ─────────────────────────────────────────────────────────────────────────────
+export async function createToken(
+  signer: Signer,
+  params: SnowballParams,
+  salt: string,
+  creationFee: string
+) {
+  const factory = getFactoryContract(signer);
+  const launchParams = buildLaunchParams(params);
+  const tx = await factory.createToken(launchParams, salt, { value: creationFee });
+  const receipt = await tx.wait();
+  const event = receipt?.logs
+    .map((log: any) => {
+      try {
+        return factory.interface.parseLog(log);
+      } catch {
+        return null;
+      }
+    })
+    .find((e: any) => e?.name === "TokenCreated");
+  return { receipt, tokenAddress: event?.args?.token, txHash: tx.hash };
+}
+
+export async function createTokenAndAddLiquidity(
+  signer: Signer,
+  params: SnowballParams,
+  salt: string,
+  creationFee: string,
+  liquidityTokens: string,
+  liquidityBnb: string
+) {
+  const factory = getFactoryContract(signer);
+  const launchParams = buildLaunchParams(params);
+  const totalValue = (BigInt(creationFee) + BigInt(liquidityBnb)).toString();
+  const tx = await factory.createTokenAndAddLiquidity(
+    launchParams,
+    salt,
+    liquidityTokens,
+    liquidityBnb,
+    { value: totalValue }
+  );
+  const receipt = await tx.wait();
+  const event = receipt?.logs
+    .map((log: any) => {
+      try {
+        return factory.interface.parseLog(log);
+      } catch {
+        return null;
+      }
+    })
+    .find((e: any) => e?.name === "TokenCreated");
+  return { receipt, tokenAddress: event?.args?.token, txHash: tx.hash };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 读操作：Factory 信息
+// ─────────────────────────────────────────────────────────────────────────────
+export async function getFactoryInfo() {
+  const factory = getFactoryContract();
+  const [createFee, rewardToken, feeRecipient, owner, requiredSuffix, router] = await Promise.all([
+    factory.createFee(),
+    factory.defaultRewardToken ? factory.defaultRewardToken() : ADDRESSES.usdt,
+    factory.feeRecipient(),
+    factory.owner(),
+    factory.requiredTokenSuffix(),
+    factory.router(),
+  ]);
+  return {
+    createFee: createFee.toString(),
+    rewardToken,
+    feeRecipient,
+    owner,
+    requiredSuffix: requiredSuffix.toString(),
+    router,
+  };
+}

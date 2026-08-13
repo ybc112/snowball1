@@ -538,7 +538,7 @@ export default function SnowballLaunch() {
               <Snowflake className="h-6 w-6" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-base font-bold leading-tight text-[var(--sb-text)] md:text-lg">雪球发射台</h1>
+              <h1 className="text-base font-bold leading-tight text-[var(--sb-text)] md:text-lg">燃烧发射台</h1>
               <p className="hidden text-xs text-[var(--sb-muted)] sm:block">LP 单边燃烧 · 自动回流 · 持币分红</p>
             </div>
           </div>
@@ -573,7 +573,7 @@ export default function SnowballLaunch() {
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <Rocket className="h-5 w-5 text-[var(--sb-gold)]" />
-                <h2 className="text-2xl font-black tracking-tight text-[var(--sb-text)] lg:text-3xl">雪球发射台</h2>
+                <h2 className="text-2xl font-black tracking-tight text-[var(--sb-text)] lg:text-3xl">燃烧发射台</h2>
                 <span className="rounded-md bg-[var(--sb-gold-light)] px-2 py-0.5 text-[10px] font-bold text-[var(--sb-gold)]">
                   LAUNCH
                 </span>
@@ -766,7 +766,7 @@ export default function SnowballLaunch() {
 
             <div className="mt-6 border-t border-[var(--sb-border)] pt-6">
               <p className="mb-4 text-sm font-medium text-[var(--sb-text)]">
-                税后分配比例（固定扣除 20% 平台分成后，四项之和须 = 100%）
+                税后分配比例（四项之和须 = 100%）
               </p>
               {shareError && <p className="mb-3 text-sm text-[var(--sb-red)]">{shareError}</p>}
               <div className="grid gap-4 md:grid-cols-2">
@@ -777,7 +777,7 @@ export default function SnowballLaunch() {
                   min={0}
                   max={BPS}
                   step={100}
-                  hint="扣除 20% 平台分成后剩余部分的分配"
+                  hint="持币分红占税后分配的比例"
                 />
                 <SliderGroup
                   label="自动回流 share"

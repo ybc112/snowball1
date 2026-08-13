@@ -230,10 +230,17 @@ export default function SnowballLaunch() {
   const [liquidityBnb, setLiquidityBnb] = useState("0.1");
   const [liquidityTokenPercent, setLiquidityTokenPercent] = useState(80);
 
+  const [factoryStatus, setFactoryStatus] = useState<"loading" | "ok" | "failed">("loading");
   useEffect(() => {
     getFactoryInfo()
-      .then(setFactoryInfo)
-      .catch(() => setFactoryInfo(null));
+      .then((info) => {
+        setFactoryInfo(info);
+        setFactoryStatus("ok");
+      })
+      .catch(() => {
+        setFactoryInfo(null);
+        setFactoryStatus("failed");
+      });
   }, []);
 
   // receiver 默认用当前钱包
@@ -490,14 +497,21 @@ export default function SnowballLaunch() {
             </div>
           </div>
         </div>
-      ) : (
+      ) : factoryStatus === "failed" ? (
         <div className="mx-auto max-w-6xl px-4 pb-6">
           <div className="flex items-center gap-3 rounded-xl border border-[var(--sb-red)]/30 bg-[var(--sb-red)]/5 p-4 text-sm text-[var(--sb-red)]">
             <AlertCircle className="h-5 w-5 shrink-0" />
             <div className="min-w-0 break-words">
-              <p className="font-medium">雪球 Factory 未配置</p>
-              <p>请在 .env 中设置 VITE_SNOWBALL_FACTORY_ADDRESS，否则无法预测地址和创建代币。</p>
+              <p className="font-medium">无法读取 Factory 信息</p>
+              <p>合约地址已配置（{FACTORY_ADDRESS.slice(0, 10)}…），但连接主网节点失败。请检查网络后刷新重试。</p>
             </div>
+          </div>
+        </div>
+      ) : (
+        <div className="mx-auto max-w-6xl px-4 pb-6">
+          <div className="flex items-center gap-3 rounded-xl border border-[var(--sb-border)] bg-white p-4 text-sm text-[var(--sb-muted)]">
+            <AlertCircle className="h-5 w-5 shrink-0" />
+            <p>正在读取 Factory 信息…</p>
           </div>
         </div>
       )}

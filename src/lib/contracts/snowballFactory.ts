@@ -351,3 +351,42 @@ export async function getFactoryInfo() {
     router,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 雪球后端 API（服务器挖盐 + 自动开源，/root/snowball · pm2 snowball-backend）
+// ─────────────────────────────────────────────────────────────────────────────
+export const SNOWBALL_API_BASE =
+  import.meta.env.VITE_SNOWBALL_API_URL || "http://36.151.145.15/snowball-api";
+
+export async function serverMineSalt(
+  params: BuiltParams,
+  suffix: string,
+  maxIterations = 50000
+): Promise<{ salt: string; address: string; attempts: number } | null> {
+  try {
+    const res = await fetch(`${SNOWBALL_API_BASE}/api/vanity-salt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ suffix, params, maxIterations }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.ok) return null;
+    return { salt: data.salt, address: data.address, attempts: data.attempts };
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchVerifyStatus(): Promise<
+  { id: string; tokenAddress: string; status: string; error?: string; guid?: string }[]
+> {
+  try {
+    const res = await fetch(`${SNOWBALL_API_BASE}/api/verify-status`, { method: "GET" });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.jobs || [];
+  } catch {
+    return [];
+  }
+}

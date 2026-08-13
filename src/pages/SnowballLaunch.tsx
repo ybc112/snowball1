@@ -27,6 +27,7 @@ import {
   FACTORY_ABI,
   getFactoryInfo,
   mineSalt,
+  serverMineSalt,
   createToken,
   createTokenAndAddLiquidity,
   getReadProvider,
@@ -443,19 +444,28 @@ export default function SnowballLaunch() {
     setMineResult(null);
     abortRef.current = new AbortController();
     try {
-      const provider = getReadProvider();
-      const factory = new ethers.Contract(FACTORY_ADDRESS, FACTORY_ABI, provider);
       const built = await buildContractParams(params, deployMode === "launch");
       const suffix = factoryInfo.requiredSuffix && factoryInfo.requiredSuffix !== "0" ? factoryInfo.requiredSuffix : "7777";
-      const res = await mineSalt(
-        factory,
-        built,
-        suffix,
-        (tried, addr) => showToast(`已尝试 ${tried} 次，当前 ${shorten(addr)}`, "info"),
-        abortRef.current.signal
-      );
-      setMineResult(res);
-      showToast(`靓号挖到：${shorten(res.address)}`, "success");
+      // 优先服务端挖盐（算力快），失败回退本地
+      showToast("尝试服务端挖盐…", "info");
+      const serverRes = await serverMineSalt(built, suffix);
+      if (serverRes) {
+        setMineResult(serverRes);
+        showToast(`服务端靓号挖到：${shorten(serverRes.address)}（${serverRes.attempts.toLocaleString()} 次）`, "success");
+      } else {
+        const provider = getReadProvider();
+        const factory = new ethers.Contract(FACTORY_ADDRESS, FACTORY_ABI, provider);
+        showToast("服务端不可用，改用本地挖盐…", "info");
+        const res = await mineSalt(
+          factory,
+          built,
+          suffix,
+          (tried, addr) => showToast(`已尝试 ${tried} 次，当前 ${shorten(addr)}`, "info"),
+          abortRef.current.signal
+        );
+        setMineResult(res);
+        showToast(`靓号挖到：${shorten(res.address)}`, "success");
+      }
     } catch (e: any) {
       showToast(e.message || "挖盐失败", "error");
     } finally {
@@ -1054,6 +1064,10 @@ export default function SnowballLaunch() {
                 </a>
               </div>
             </div>
+            <p className="mb-4 mt-2 flex items-start gap-1.5 text-xs text-[var(--sb-muted)]">
+              <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--sb-gold)]" />
+              服务端自动开源监控已启动：代币创建后会自动向 BscScan 提交源码验证，可在链上查看验证状态。
+            </p>
             <button
               onClick={() => setResult(null)}
               className="w-full rounded-xl bg-[var(--sb-text)] py-3 text-sm font-bold text-white"

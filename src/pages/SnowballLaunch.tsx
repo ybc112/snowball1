@@ -93,16 +93,114 @@ function useCopy() {
   return { copied, copy };
 }
 
-function Card({ children, className, title, icon: Icon }: any) {
+function Card({ children, className, title, icon: Icon, number }: any) {
   return (
     <div className={cn("rounded-2xl border border-[var(--sb-border)] bg-[var(--sb-card)] p-6 shadow-sm", className)}>
       {title && (
         <div className="mb-5 flex items-center gap-2 text-lg font-semibold text-[var(--sb-text)]">
           {Icon && <Icon className="h-5 w-5 text-[var(--sb-gold)]" />}
+          {number && (
+            <span className="flex h-6 min-w-6 items-center justify-center rounded-md bg-[var(--sb-gold-light)] px-1 text-xs font-bold text-[var(--sb-gold)]">
+              {number}
+            </span>
+          )}
           {title}
         </div>
       )}
       {children}
+    </div>
+  );
+}
+
+// 税费分配环形图（参照 KimiMint AllocationRing 的 SVG 扇形实现）
+const RING_COLORS = {
+  platform: "#C84B31", // 平台（红）
+  reward: "#D4A574", // 分红（金）
+  liquidity: "#5B8DB8", // 回流（蓝）
+  burn: "#E08E45", // 燃烧（橙）
+  fund: "#8E6BB3", // 基金（紫）
+};
+
+const RING_LEGEND = [
+  { key: "platform", feeKey: "platformFee", label: "平台", color: RING_COLORS.platform },
+  { key: "reward", feeKey: "rewardFee", label: "分红", color: RING_COLORS.reward },
+  { key: "liquidity", feeKey: "liquidityFee", label: "回流", color: RING_COLORS.liquidity },
+  { key: "burn", feeKey: "burnFee", label: "燃烧", color: RING_COLORS.burn },
+  { key: "fund", feeKey: "fundFee", label: "基金", color: RING_COLORS.fund },
+] as const;
+
+function feeSharePct(fee: FeeBreakdown | null | undefined, key: keyof FeeBreakdown) {
+  if (!fee) return "--";
+  const total = fee.platformFee + fee.rewardFee + fee.liquidityFee + fee.burnFee + fee.fundFee;
+  if (total === 0) return "0.0";
+  return ((fee[key] / total) * 100).toFixed(1);
+}
+
+function TaxRing({
+  fee,
+  label,
+  totalTaxBps,
+  loading,
+}: {
+  fee: FeeBreakdown | null;
+  label: string;
+  totalTaxBps: number;
+  loading?: boolean;
+}) {
+  // 各段按占税费总额的比例画扇形（环满圈 = 总税费 100%）
+  const taxPct = totalTaxBps / 100; // bps -> 百分比
+  const total =
+    fee ? fee.platformFee + fee.rewardFee + fee.liquidityFee + fee.burnFee + fee.fundFee : 0;
+  const items = fee && total > 0
+    ? [
+        { key: "platform", value: (fee.platformFee / total) * 100, color: RING_COLORS.platform },
+        { key: "reward", value: (fee.rewardFee / total) * 100, color: RING_COLORS.reward },
+        { key: "liquidity", value: (fee.liquidityFee / total) * 100, color: RING_COLORS.liquidity },
+        { key: "burn", value: (fee.burnFee / total) * 100, color: RING_COLORS.burn },
+        { key: "fund", value: (fee.fundFee / total) * 100, color: RING_COLORS.fund },
+      ].filter((i) => i.value > 0)
+    : [];
+
+  let cumulative = 0;
+  const segments = items.map((item) => {
+    const start = cumulative;
+    cumulative += item.value;
+    const end = cumulative;
+    const largeArc = item.value > 50 ? 1 : 0;
+    const startAngle = (start / 100) * Math.PI * 2 - Math.PI / 2;
+    const endAngle = (end / 100) * Math.PI * 2 - Math.PI / 2;
+    const x1 = 50 + 42 * Math.cos(startAngle);
+    const y1 = 50 + 42 * Math.sin(startAngle);
+    const x2 = 50 + 42 * Math.cos(endAngle);
+    const y2 = 50 + 42 * Math.sin(endAngle);
+    return {
+      ...item,
+      d: `M 50 50 L ${x1} ${y1} A 42 42 0 ${largeArc} 1 ${x2} ${y2} Z`,
+    };
+  });
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="relative h-32 w-32">
+        <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
+          {loading || segments.length === 0 ? (
+            <circle cx="50" cy="50" r="42" fill="none" stroke="var(--sb-border)" strokeWidth="16" />
+          ) : (
+            <>
+              {segments.map((segment) => (
+                <path key={segment.key} d={segment.d} fill={segment.color} stroke="var(--sb-card)" strokeWidth="2" />
+              ))}
+            </>
+          )}
+          <circle cx="50" cy="50" r="26" fill="var(--sb-card)" />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-xl font-bold text-[var(--sb-text)]">
+            {loading ? "--" : `${taxPct.toFixed(2)}%`}
+          </span>
+          <span className="text-[10px] text-[var(--sb-muted)]">{label}</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -452,69 +550,74 @@ export default function SnowballLaunch() {
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="mx-auto max-w-6xl px-4 py-10">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[var(--sb-text)] to-[#4a3f32] p-6 text-white shadow-xl md:p-12">
-          <div className="relative z-10 max-w-2xl">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs backdrop-blur">
-              <Flame className="h-3.5 w-3.5 text-orange-400" />
-              达到间隔后由卖出触发底池燃烧
+      {/* Hero / status strip（Mint 风格） */}
+      <section className="mx-auto max-w-6xl px-4 pb-6 pt-8">
+        <div className="flex flex-col gap-5 rounded-3xl border border-[var(--sb-border)] bg-[var(--sb-card)] p-6 shadow-sm lg:flex-row lg:items-center">
+          <div className="flex items-start gap-4 lg:flex-1">
+            <div
+              className={cn(
+                "mt-1.5 h-3 w-3 shrink-0 rounded-full border-2 border-[var(--sb-card)] shadow-[0_0_8px_currentColor]",
+                isConnected ? "bg-[var(--sb-success)] text-[var(--sb-success)]" : "bg-[var(--sb-muted)] text-[var(--sb-muted)]"
+              )}
+            />
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Rocket className="h-5 w-5 text-[var(--sb-gold)]" />
+                <h2 className="text-2xl font-black tracking-tight text-[var(--sb-text)] lg:text-3xl">雪球发射台</h2>
+                <span className="rounded-md bg-[var(--sb-gold-light)] px-2 py-0.5 text-[10px] font-bold text-[var(--sb-gold)]">
+                  LAUNCH
+                </span>
+              </div>
+              <p className="mt-1.5 text-sm text-[var(--sb-muted)]">
+                一键创建带 LP 单边燃烧机制的 meme 币：自动烧池、自动回流、持币分红
+              </p>
+              <p className="mt-1 text-xs text-[var(--sb-muted)]">
+                {isConnected
+                  ? `${shorten(account!)} · Factory ${shorten(FACTORY_ADDRESS)}`
+                  : "连接钱包后会自动填入创建者接收地址"}
+              </p>
+              {factoryStatus === "failed" && (
+                <p className="mt-2 flex items-center gap-1 text-xs text-[var(--sb-red)]">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  无法读取 Factory 信息（{shorten(FACTORY_ADDRESS)}），连接主网节点失败，请刷新重试
+                </p>
+              )}
             </div>
-            <h2 className="mb-3 break-words text-2xl font-extrabold md:text-4xl">
-              傻瓜式发射 <span className="text-[var(--sb-gold)]">自动烧池 meme 币</span>
-            </h2>
-            <p className="text-sm leading-relaxed text-white/80 md:text-base">
-              一键创建带 LP 单边燃烧机制的代币。卖出时若达到燃烧间隔，自动从池子中转出本币至黑洞并 sync，
-              默认每 3600 秒燃烧池子储备的 0.5%，复利后每日约减少 11.35%。
-            </p>
           </div>
-          <Snowflake className="absolute -right-8 -top-8 h-48 w-48 rotate-12 text-white/5 md:h-64 md:w-64" />
-          <Flame className="absolute bottom-0 right-12 h-28 w-28 text-orange-500/10 md:h-40 md:w-40" />
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:w-[560px]">
+            {[
+              {
+                label: "创建费",
+                value: factoryInfo ? `${ethers.formatEther(factoryInfo.createFee)} BNB` : factoryStatus === "loading" ? "读取中…" : "--",
+              },
+              {
+                label: "靓号后缀",
+                value: factoryInfo ? (factoryInfo.requiredSuffix === "0" ? "无" : factoryInfo.requiredSuffix) : "--",
+              },
+              { label: "平台分成", value: "20%" },
+              { label: "分红代币", value: "USDT" },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="rounded-xl border border-[var(--sb-border)] bg-[var(--sb-bg)]/60 p-3 text-center transition-colors hover:border-[var(--sb-gold)]/40"
+              >
+                <div className="text-xs text-[var(--sb-muted)]">{item.label}</div>
+                <div className="mt-1 text-sm font-bold text-[var(--sb-text)]">{item.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {isConnected && (
+            <button
+              onClick={connect}
+              className="shrink-0 rounded-xl bg-[var(--sb-text)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--sb-text)]/90"
+            >
+              切换网络
+            </button>
+          )}
         </div>
       </section>
-
-      {/* Factory status */}
-      {factoryInfo ? (
-        <div className="mx-auto max-w-6xl px-4 pb-6">
-          <div className="grid gap-3 md:grid-cols-4">
-            <div className="rounded-xl border border-[var(--sb-border)] bg-white p-4">
-              <p className="text-xs text-[var(--sb-muted)]">创建费</p>
-              <p className="text-lg font-bold text-[var(--sb-text)]">{ethers.formatEther(factoryInfo.createFee)} BNB</p>
-            </div>
-            <div className="rounded-xl border border-[var(--sb-border)] bg-white p-4">
-              <p className="text-xs text-[var(--sb-muted)]">靓号后缀</p>
-              <p className="text-lg font-bold text-[var(--sb-text)]">
-                {factoryInfo.requiredSuffix === "0" ? "无" : factoryInfo.requiredSuffix}
-              </p>
-            </div>
-            <div className="rounded-xl border border-[var(--sb-border)] bg-white p-4">
-              <p className="text-xs text-[var(--sb-muted)]">平台分成</p>
-              <p className="text-lg font-bold text-[var(--sb-text)]">20%</p>
-            </div>
-            <div className="rounded-xl border border-[var(--sb-border)] bg-white p-4">
-              <p className="text-xs text-[var(--sb-muted)]">分红代币</p>
-              <p className="text-lg font-bold text-[var(--sb-text)]">USDT</p>
-            </div>
-          </div>
-        </div>
-      ) : factoryStatus === "failed" ? (
-        <div className="mx-auto max-w-6xl px-4 pb-6">
-          <div className="flex items-center gap-3 rounded-xl border border-[var(--sb-red)]/30 bg-[var(--sb-red)]/5 p-4 text-sm text-[var(--sb-red)]">
-            <AlertCircle className="h-5 w-5 shrink-0" />
-            <div className="min-w-0 break-words">
-              <p className="font-medium">无法读取 Factory 信息</p>
-              <p>合约地址已配置（{FACTORY_ADDRESS.slice(0, 10)}…），但连接主网节点失败。请检查网络后刷新重试。</p>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="mx-auto max-w-6xl px-4 pb-6">
-          <div className="flex items-center gap-3 rounded-xl border border-[var(--sb-border)] bg-white p-4 text-sm text-[var(--sb-muted)]">
-            <AlertCircle className="h-5 w-5 shrink-0" />
-            <p>正在读取 Factory 信息…</p>
-          </div>
-        </div>
-      )}
 
       {/* Deploy mode */}
       <section className="mx-auto max-w-6xl px-4 pb-6">
@@ -552,7 +655,7 @@ export default function SnowballLaunch() {
       {/* Main form */}
       <main className="mx-auto grid max-w-6xl gap-6 px-4 md:grid-cols-[1fr_360px]">
         <div className="space-y-6">
-          <Card title="基础信息" icon={Rocket}>
+          <Card title="基础信息" icon={Rocket} number="01">
             <div className="grid gap-5 md:grid-cols-2">
               <InputGroup
                 label="代币名称"
@@ -591,7 +694,7 @@ export default function SnowballLaunch() {
           </Card>
 
           {deployMode === "launch" && (
-            <Card title="一键加池设置" icon={Droplets}>
+            <Card title="一键加池设置" icon={Droplets} number="02">
               <div className="grid gap-5 md:grid-cols-2">
                 <InputGroup
                   label="加池 BNB"
@@ -630,7 +733,7 @@ export default function SnowballLaunch() {
             </Card>
           )}
 
-          <Card title="交易税配置" icon={Droplets}>
+          <Card title="交易税配置" icon={Droplets} number="03">
             {taxError && <p className="mb-4 text-sm text-[var(--sb-red)]">{taxError}</p>}
             <div className="grid gap-6 md:grid-cols-2">
               <SliderGroup
@@ -695,7 +798,7 @@ export default function SnowballLaunch() {
             </div>
           </Card>
 
-          <Card title="燃烧与风控" icon={FireExtinguisher}>
+          <Card title="燃烧与风控" icon={FireExtinguisher} number="04">
             <div className="grid gap-5 md:grid-cols-2">
               <InputGroup
                 label="燃烧间隔"
@@ -745,7 +848,7 @@ export default function SnowballLaunch() {
             </div>
           </Card>
 
-          <Card title="高级选项" icon={ShieldCheck}>
+          <Card title="高级选项" icon={ShieldCheck} number="05">
             <div className="grid gap-5 md:grid-cols-2">
               <InputGroup
                 label="转账手续费"
@@ -793,6 +896,21 @@ export default function SnowballLaunch() {
         {/* Sidebar preview */}
         <div className="space-y-6">
           <Card title="费用预览" icon={Sparkles}>
+            <div className="mb-5 grid grid-cols-2 gap-3">
+              <TaxRing fee={fees?.buy ?? null} label="买入税" totalTaxBps={params.totalBuyTax} loading={feesLoading} />
+              <TaxRing fee={fees?.sell ?? null} label="卖出税" totalTaxBps={params.totalSellTax} loading={feesLoading} />
+            </div>
+            <div className="mb-5 grid grid-cols-1 gap-1.5 rounded-xl bg-[var(--sb-bg)]/60 p-3 text-xs text-[var(--sb-muted)] sm:grid-cols-2">
+              {RING_LEGEND.map((item) => (
+                <div key={item.key} className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: item.color }} />
+                  <span>{item.label}</span>
+                  <span className="ml-auto font-medium text-[var(--sb-text)]">
+                    {feeSharePct(fees?.buy, item.feeKey)}% / {feeSharePct(fees?.sell, item.feeKey)}%
+                  </span>
+                </div>
+              ))}
+            </div>
             <div className="space-y-5">
               <div>
                 <div className="mb-2 flex items-center justify-between text-sm">

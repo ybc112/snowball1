@@ -33,7 +33,8 @@ export const ADDRESSES = {
 };
 
 export const FACTORY_ADDRESS =
-  import.meta.env.VITE_SNOWBALL_FACTORY_ADDRESS || "";
+  import.meta.env.VITE_SNOWBALL_FACTORY_ADDRESS ||
+  "0xDa80B6d6A495e5AA4870391D36E7F9628Be7f79A"; // BSC 主网，2026-08-13 部署
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TokenFactory ABI（对齐 flap-vault-ai-coder/contracts/tokenfactory/TokenFactory.sol）

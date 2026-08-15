@@ -117,7 +117,6 @@ function Card({ children, className, title, icon: Icon, number }: any) {
 
 // 税费分配环形图（参照 KimiMint AllocationRing 的 SVG 扇形实现）
 const RING_COLORS = {
-  platform: "#C84B31", // 平台（红）
   reward: "#D4A574", // 分红（金）
   liquidity: "#5B8DB8", // 回流（蓝）
   burn: "#E08E45", // 燃烧（橙）
@@ -125,7 +124,6 @@ const RING_COLORS = {
 };
 
 const RING_LEGEND = [
-  { key: "platform", feeKey: "platformFee", label: "平台", color: RING_COLORS.platform },
   { key: "reward", feeKey: "rewardFee", label: "分红", color: RING_COLORS.reward },
   { key: "liquidity", feeKey: "liquidityFee", label: "回流", color: RING_COLORS.liquidity },
   { key: "burn", feeKey: "burnFee", label: "燃烧", color: RING_COLORS.burn },
@@ -150,13 +148,12 @@ function TaxRing({
   totalTaxBps: number;
   loading?: boolean;
 }) {
-  // 各段按占税费总额的比例画扇形（环满圈 = 总税费 100%）
+  // 各段按税后分配（不含平台分成）的比例画扇形，环满圈 = 税后分配 100%
   const taxPct = totalTaxBps / 100; // bps -> 百分比
   const total =
-    fee ? fee.platformFee + fee.rewardFee + fee.liquidityFee + fee.burnFee + fee.fundFee : 0;
+    fee ? fee.rewardFee + fee.liquidityFee + fee.burnFee + fee.fundFee : 0;
   const items = fee && total > 0
     ? [
-        { key: "platform", value: (fee.platformFee / total) * 100, color: RING_COLORS.platform },
         { key: "reward", value: (fee.rewardFee / total) * 100, color: RING_COLORS.reward },
         { key: "liquidity", value: (fee.liquidityFee / total) * 100, color: RING_COLORS.liquidity },
         { key: "burn", value: (fee.burnFee / total) * 100, color: RING_COLORS.burn },
@@ -641,7 +638,7 @@ export default function SnowballLaunch() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:w-[560px]">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:w-[420px]">
             {[
               {
                 label: "创建费",
@@ -651,7 +648,6 @@ export default function SnowballLaunch() {
                 label: "靓号后缀",
                 value: factoryInfo ? (factoryInfo.requiredSuffix === "0" ? "无" : factoryInfo.requiredSuffix) : "--",
               },
-              { label: "平台分成", value: "20%" },
               { label: "分红代币", value: "USDT" },
             ].map((item) => (
               <div
@@ -979,11 +975,10 @@ export default function SnowballLaunch() {
                   feeBar(fees?.buy || null)
                 )}
                 <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-[var(--sb-muted)]">
-                  <span>平台 {formatBps(fees?.buy.platformFee || 0)}</span>
                   <span>分红 {formatBps(fees?.buy.rewardFee || 0)}</span>
                   <span>回流 {formatBps(fees?.buy.liquidityFee || 0)}</span>
                   <span>燃烧 {formatBps(fees?.buy.burnFee || 0)}</span>
-                  <span className="col-span-2">基金 {formatBps(fees?.buy.fundFee || 0)}</span>
+                  <span>基金 {formatBps(fees?.buy.fundFee || 0)}</span>
                 </div>
               </div>
               <div>

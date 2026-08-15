@@ -1,14 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --sb-bg: #FFFBF5;
+  /* 猴子火焰燃烧主题：红橙火焰色系 */
+  --sb-bg: #FFF6F2;
   --sb-card: #FFFFFF;
-  --sb-gold: #D4A574;
-  --sb-gold-light: #F3E5D0;
-  --sb-red: #C84B31;
-  --sb-text: #2C241B;
-  --sb-muted: #8A7D6B;
-  --sb-border: #E8DECC;
+  --sb-gold: #E0432F;        /* 火焰红（主色） */
+  --sb-gold-light: #FDE3DA;  /* 浅火焰 */
+  --sb-red: #C62828;         /* 深红 */
+  --sb-text: #2A1712;
+  --sb-muted: #A0786C;
+  --sb-border: #F3D9CE;
   --sb-success: #2E8B57;
 }
 

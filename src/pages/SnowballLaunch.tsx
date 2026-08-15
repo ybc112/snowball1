@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ethers } from "ethers";
 import {
   Flame,
-  Snowflake,
   Wallet,
   Rocket,
   Droplets,
@@ -117,9 +116,9 @@ function Card({ children, className, title, icon: Icon, number }: any) {
 
 // 税费分配环形图（参照 KimiMint AllocationRing 的 SVG 扇形实现）
 const RING_COLORS = {
-  reward: "#D4A574", // 分红（金）
+  reward: "#F2703A", // 分红（火焰橙）
   liquidity: "#5B8DB8", // 回流（蓝）
-  burn: "#E08E45", // 燃烧（橙）
+  burn: "#D93025", // 燃烧（红）
   fund: "#8E6BB3", // 基金（紫）
 };
 
@@ -577,9 +576,11 @@ export default function SnowballLaunch() {
       <header className="sticky top-0 z-30 border-b border-[var(--sb-border)] bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-md">
-              <Snowflake className="h-6 w-6" />
-            </div>
+            <img
+              src="/logo.jpg"
+              alt="logo"
+              className="h-10 w-10 shrink-0 rounded-xl border border-[var(--sb-gold)]/30 object-cover shadow-md shadow-[var(--sb-gold)]/30"
+            />
             <div className="min-w-0">
               <h1 className="text-base font-bold leading-tight text-[var(--sb-text)] md:text-lg">燃烧发射台</h1>
               <p className="hidden text-xs text-[var(--sb-muted)] sm:block">LP 单边燃烧 · 自动回流 · 持币分红</p>

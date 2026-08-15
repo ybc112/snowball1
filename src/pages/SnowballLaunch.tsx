@@ -14,6 +14,7 @@ import {
   AlertCircle,
   ChevronRight,
   Sparkles,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/hooks/useWallet";
@@ -25,6 +26,7 @@ import {
   buildContractParams,
   FACTORY_ADDRESS,
   FACTORY_ABI,
+  BANANA_TOKEN_ABI,
   getFactoryInfo,
   mineSalt,
   serverMineSalt,
@@ -322,6 +324,11 @@ export default function SnowballLaunch() {
   const [mineResult, setMineResult] = useState<{ salt: string; address: string; attempts: number } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  // 开盘管理
+  const [launching, setLaunching] = useState(false);
+  const [manageToken, setManageToken] = useState("");
+  const [manageInfo, setManageInfo] = useState<{ owner: string; launched: boolean } | null>(null);
+
   const [creating, setCreating] = useState(false);
   const [result, setResult] = useState<{ tokenAddress: string; txHash: string } | null>(null);
 
@@ -498,6 +505,45 @@ export default function SnowballLaunch() {
       showToast(e.reason || e.message || "创建失败", "error");
     } finally {
       setCreating(false);
+    }
+  };
+
+  // 开盘：调用代币合约 launch()（仅 owner 可调用，普通部署的 owner = 项目方）
+  const handleLaunch = async (tokenAddress: string) => {
+    if (!signer) {
+      showToast("请先连接钱包（需使用项目方钱包）", "error");
+      return;
+    }
+    setLaunching(true);
+    try {
+      const token = new ethers.Contract(tokenAddress, BANANA_TOKEN_ABI, signer);
+      const tx = await token.launch();
+      showToast("开盘交易已提交，等待确认…", "info");
+      await tx.wait();
+      showToast("开盘成功！交易已开放", "success");
+      setManageInfo((prev) => (prev ? { ...prev, launched: true } : prev));
+    } catch (e: any) {
+      showToast(e.reason || e.shortMessage || e.message || "开盘失败", "error");
+    } finally {
+      setLaunching(false);
+    }
+  };
+
+  // 查询代币开盘状态
+  const handleQueryToken = async () => {
+    const addr = manageToken.trim();
+    if (!ethers.isAddress(addr)) {
+      showToast("请输入有效的代币地址", "error");
+      return;
+    }
+    try {
+      const provider = getReadProvider();
+      const token = new ethers.Contract(addr, BANANA_TOKEN_ABI, provider);
+      const [owner, startTime] = await Promise.all([token.owner(), token.startTradeTime()]);
+      setManageInfo({ owner, launched: Number(startTime) > 0 });
+    } catch (e: any) {
+      setManageInfo(null);
+      showToast(e.reason || e.shortMessage || "查询失败：该地址可能不是本发射台代币", "error");
     }
   };
 
@@ -1015,6 +1061,57 @@ export default function SnowballLaunch() {
             </div>
           </Card>
 
+          <Card title="代币管理" icon={ShieldCheck}>
+            <div className="space-y-3">
+              <InputGroup
+                label="代币地址"
+                value={manageToken}
+                onChange={setManageToken}
+                placeholder="0x..."
+                hint="普通部署的代币需项目方手动开盘（一键发射已自动开盘）"
+              />
+              <button
+                onClick={handleQueryToken}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--sb-gold)]/50 bg-[var(--sb-gold-light)] py-2.5 text-sm font-bold text-[var(--sb-text)] transition hover:bg-[var(--sb-gold-light)]/70"
+              >
+                <Search className="h-4 w-4" /> 查询状态
+              </button>
+              {manageInfo && (
+                <div className="space-y-2 rounded-xl bg-[var(--sb-bg)] p-3 text-xs text-[var(--sb-muted)]">
+                  <div className="flex items-center justify-between">
+                    <span>Owner</span>
+                    <span className="font-mono font-medium text-[var(--sb-text)]">{shorten(manageInfo.owner)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>开盘状态</span>
+                    <span
+                      className={cn(
+                        "rounded-md px-2 py-0.5 font-bold",
+                        manageInfo.launched ? "bg-[var(--sb-success)]/10 text-[var(--sb-success)]" : "bg-[var(--sb-gold-light)] text-[var(--sb-gold)]"
+                      )}
+                    >
+                      {manageInfo.launched ? "已开盘" : "未开盘"}
+                    </span>
+                  </div>
+                </div>
+              )}
+              <button
+                onClick={() => handleLaunch(manageToken.trim())}
+                disabled={launching || !manageInfo || manageInfo.launched}
+                className={cn(
+                  "flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[var(--sb-gold)] to-orange-500 py-2.5 text-sm font-bold text-white transition hover:shadow-lg",
+                  (launching || !manageInfo || manageInfo.launched) && "cursor-not-allowed opacity-60"
+                )}
+              >
+                {launching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flame className="h-4 w-4" />}
+                {launching ? "开盘交易确认中…" : manageInfo?.launched ? "已开盘" : "开盘"}
+              </button>
+              {manageInfo && !manageInfo.launched && (
+                <p className="text-center text-xs text-[var(--sb-muted)]">需使用项目方钱包（Owner）连接后执行</p>
+              )}
+            </div>
+          </Card>
+
           <div className="space-y-3">
             <button
               onClick={handleCreate}
@@ -1068,6 +1165,19 @@ export default function SnowballLaunch() {
               <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--sb-gold)]" />
               服务端自动开源监控已启动：代币创建后会自动向 BscScan 提交源码验证，可在链上查看验证状态。
             </p>
+            {deployMode === "deploy" && (
+              <button
+                onClick={() => handleLaunch(result.tokenAddress)}
+                disabled={launching}
+                className={cn(
+                  "mb-2 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[var(--sb-gold)] to-orange-500 py-3 text-sm font-bold text-white transition hover:shadow-lg",
+                  launching && "cursor-not-allowed opacity-60"
+                )}
+              >
+                {launching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flame className="h-4 w-4" />}
+                {launching ? "开盘交易确认中…" : "立即开盘"}
+              </button>
+            )}
             <button
               onClick={() => setResult(null)}
               className="w-full rounded-xl bg-[var(--sb-text)] py-3 text-sm font-bold text-white"

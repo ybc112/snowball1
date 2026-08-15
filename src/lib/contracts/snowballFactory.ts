@@ -79,6 +79,7 @@ export const BANANA_TOKEN_ABI = [
   "function owner() external view returns (address)",
   "function _mainPair() external view returns (address)",
   "function launch() external",
+  "function startTradeTime() external view returns (uint256)",
   "function transferOwnership(address newOwner) external",
   "event Transfer(address indexed from, address indexed to, uint256 value)",
 ];

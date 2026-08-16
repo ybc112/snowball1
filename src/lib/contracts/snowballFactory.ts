@@ -34,7 +34,7 @@ export const ADDRESSES = {
 
 export const FACTORY_ADDRESS =
   import.meta.env.VITE_SNOWBALL_FACTORY_ADDRESS ||
-  "0xDa80B6d6A495e5AA4870391D36E7F9628Be7f79A"; // BSC 主网，2026-08-13 部署
+  "0x80C0a8485F6D0a409E1e3f8f8F59Fe0508bBaB92"; // BSC 主网，2026-08-17 部署（含手动回流）
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TokenFactory ABI（对齐 flap-vault-ai-coder/contracts/tokenfactory/TokenFactory.sol）
@@ -48,12 +48,12 @@ export const FACTORY_ABI = [
   // read / preview
   "function previewFees(uint256 totalBuyTax, uint256 totalSellTax, uint256 rewardShare, uint256 liquidityShare, uint256 burnShare, uint256 fundShare) external pure returns (tuple(uint256 platformFee,uint256 rewardFee,uint256 liquidityFee,uint256 burnFee,uint256 fundFee) buy, tuple(uint256 platformFee,uint256 rewardFee,uint256 liquidityFee,uint256 burnFee,uint256 fundFee) sell)",
   "function buildParams(LaunchParams calldata params, bool withLiquidity) external view returns (string[] memory, address[] memory, uint256[] memory, bool[] memory)",
-  "function createFee() external view returns (uint256)",
+  "function creationFee() external view returns (uint256)",
+  "function DEFAULT_REWARD_TOKEN() external view returns (address)",
   "function feeRecipient() external view returns (address)",
   "function router() external view returns (address)",
   "function dividendTrackerImpl() external view returns (address)",
   "function tokenDeployer() external view returns (address)",
-  "function owner() external view returns (address)",
   "function requiredTokenSuffix() external view returns (uint256)",
   "function allTokensLength() external view returns (uint256)",
   "function allTokens(uint256 index) external view returns (address)",
@@ -78,9 +78,50 @@ export const BANANA_TOKEN_ABI = [
   "function totalSupply() external view returns (uint256)",
   "function owner() external view returns (address)",
   "function _mainPair() external view returns (address)",
+  "function fundAddress() external view returns (address)",
+  "function _buyFundFee() external view returns (uint256)",
+  "function _buyLiquidityFee() external view returns (uint256)",
+  "function _buyRewardFee() external view returns (uint256)",
+  "function _buyBurnFee() external view returns (uint256)",
+  "function _sellFundFee() external view returns (uint256)",
+  "function _sellLiquidityFee() external view returns (uint256)",
+  "function _sellRewardFee() external view returns (uint256)",
+  "function _sellBurnFee() external view returns (uint256)",
+  "function _buyPlatformFee() external view returns (uint256)",
+  "function _sellPlatformFee() external view returns (uint256)",
+  "function maxBuyAmount() external view returns (uint256)",
+  "function maxSellAmount() external view returns (uint256)",
+  "function maxWalletAmount() external view returns (uint256)",
+  "function swapAtAmount() external view returns (uint256)",
+  "function mushHoldNum() external view returns (uint256)",
+  "function lpBurnFrequency() external view returns (uint256)",
+  "function percentForLPBurn() external view returns (uint256)",
+  "function getMinimumTokenBalanceForDividends() external view returns (uint256)",
+  "function getClaimWait() external view returns (uint256)",
   "function launch() external",
   "function startTradeTime() external view returns (uint256)",
+  "function setTradeFee(uint256[] customs) external",
+  "function setFundAddress(address wallet) external",
+  "function setMaxBuyAmount(uint256 amount) external",
+  "function setMaxSellAmount(uint256 amount) external",
+  "function setWalletLimit(uint256 amount) external",
+  "function setSwapAtAmount(uint256 amount) external",
+  "function setkb(uint256 blocks_) external",
+  "function setSecondTime(uint256 seconds_) external",
+  "function setAirdropNumbs(uint256 count) external",
+  "function setTransferFee(uint256 bps) external",
+  "function setSwapAndLiquifyEnabled(bool enabled) external",
+  "function manualSwapBack() external",
+  "function setNumTokensSellRate(uint256 rate) external",
+  "function setFeeWhiteList(address[] addresses, bool enabled) external",
+  "function multi_bclist(address[] addresses, bool enabled) external",
+  "function excludeFromDividends(address account) external",
+  "function updateMinimumTokenBalanceForDividends(uint256 amount) external",
+  "function updateClaimWait(uint256 seconds_) external",
+  "function setlpBurnFrequency(uint256 seconds_) external",
+  "function setpercentForLPBurn(uint256 bps) external",
   "function transferOwnership(address newOwner) external",
+  "function renounceOwnership() external",
   "event Transfer(address indexed from, address indexed to, uint256 value)",
 ];
 
@@ -157,7 +198,7 @@ export function buildLaunchParams(p: SnowballParams): any {
     symbol: p.symbol,
     totalSupply: ethers.parseUnits(p.totalSupply || "0", 18),
     receiver: p.receiver,
-    fundAddress: p.fundAddress || ethers.ZeroAddress,
+    fundAddress: p.fundAddress || p.receiver,
     rewardToken: p.rewardToken || ADDRESSES.usdt,
     currency: p.currency || ADDRESSES.wbnb,
     totalBuyTax: BigInt(p.totalBuyTax),
@@ -181,30 +222,18 @@ export function buildLaunchParams(p: SnowballParams): any {
 }
 
 export async function previewFees(p: SnowballParams): Promise<{ buy: FeeBreakdown; sell: FeeBreakdown }> {
-  const factory = getFactoryContract();
-  const [buy, sell] = await factory.previewFees(
-    p.totalBuyTax,
-    p.totalSellTax,
-    p.rewardShare,
-    p.liquidityShare,
-    p.burnShare,
-    p.fundShare
-  );
+  const split = (totalTax: number): FeeBreakdown => {
+    const platformFee = Math.floor((totalTax * 2000) / 10000);
+    const leftTax = totalTax - platformFee;
+    const rewardFee = Math.floor((leftTax * p.rewardShare) / 10000);
+    const liquidityFee = Math.floor((leftTax * p.liquidityShare) / 10000);
+    const burnFee = Math.floor((leftTax * p.burnShare) / 10000);
+    const fundFee = leftTax - rewardFee - liquidityFee - burnFee;
+    return { platformFee, rewardFee, liquidityFee, burnFee, fundFee };
+  };
   return {
-    buy: {
-      platformFee: Number(buy.platformFee),
-      rewardFee: Number(buy.rewardFee),
-      liquidityFee: Number(buy.liquidityFee),
-      burnFee: Number(buy.burnFee),
-      fundFee: Number(buy.fundFee),
-    },
-    sell: {
-      platformFee: Number(sell.platformFee),
-      rewardFee: Number(sell.rewardFee),
-      liquidityFee: Number(sell.liquidityFee),
-      burnFee: Number(sell.burnFee),
-      fundFee: Number(sell.fundFee),
-    },
+    buy: split(p.totalBuyTax),
+    sell: split(p.totalSellTax),
   };
 }
 
@@ -335,11 +364,10 @@ export async function createTokenAndAddLiquidity(
 // ─────────────────────────────────────────────────────────────────────────────
 export async function getFactoryInfo() {
   const factory = getFactoryContract();
-  const [createFee, rewardToken, feeRecipient, owner, requiredSuffix, router] = await Promise.all([
-    factory.createFee(),
-    factory.defaultRewardToken ? factory.defaultRewardToken() : ADDRESSES.usdt,
+  const [createFee, rewardToken, feeRecipient, requiredSuffix, router] = await Promise.all([
+    factory.creationFee(),
+    factory.DEFAULT_REWARD_TOKEN(),
     factory.feeRecipient(),
-    factory.owner(),
     factory.requiredTokenSuffix(),
     factory.router(),
   ]);
@@ -347,7 +375,6 @@ export async function getFactoryInfo() {
     createFee: createFee.toString(),
     rewardToken,
     feeRecipient,
-    owner,
     requiredSuffix: requiredSuffix.toString(),
     router,
   };
@@ -357,13 +384,14 @@ export async function getFactoryInfo() {
 // 雪球后端 API（服务器挖盐 + 自动开源，/root/snowball · pm2 snowball-backend）
 // ─────────────────────────────────────────────────────────────────────────────
 export const SNOWBALL_API_BASE =
-  import.meta.env.VITE_SNOWBALL_API_URL || "http://36.151.145.15/snowball-api";
+  (import.meta.env.VITE_SNOWBALL_API_URL || "").replace(/\/$/, "");
 
 export async function serverMineSalt(
   params: BuiltParams,
   suffix: string,
   maxIterations = 50000
 ): Promise<{ salt: string; address: string; attempts: number } | null> {
+  if (!SNOWBALL_API_BASE) return null;
   try {
     const res = await fetch(`${SNOWBALL_API_BASE}/api/vanity-salt`, {
       method: "POST",
@@ -382,6 +410,7 @@ export async function serverMineSalt(
 export async function fetchVerifyStatus(): Promise<
   { id: string; tokenAddress: string; status: string; error?: string; guid?: string }[]
 > {
+  if (!SNOWBALL_API_BASE) return [];
   try {
     const res = await fetch(`${SNOWBALL_API_BASE}/api/verify-status`, { method: "GET" });
     if (!res.ok) return [];

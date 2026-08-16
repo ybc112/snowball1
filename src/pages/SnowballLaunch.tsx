@@ -33,6 +33,7 @@ import {
   createTokenAndAddLiquidity,
   getReadProvider,
   ADDRESSES,
+  SNOWBALL_API_BASE,
 } from "@/lib/contracts/snowballFactory";
 
 const BPS = 10000;
@@ -308,7 +309,6 @@ export default function SnowballLaunch() {
     createFee: string;
     rewardToken: string;
     feeRecipient: string;
-    owner: string;
     requiredSuffix: string;
     router: string;
   } | null>(null);
@@ -350,7 +350,7 @@ export default function SnowballLaunch() {
     if (account && !params.receiver) {
       setParams((p) => ({ ...p, receiver: account, fundAddress: account }));
     }
-  }, [account]);
+  }, [account, params.receiver]);
 
   // 异步预览费率
   useEffect(() => {
@@ -367,14 +367,7 @@ export default function SnowballLaunch() {
     return () => {
       cancelled = true;
     };
-  }, [
-    params.totalBuyTax,
-    params.totalSellTax,
-    params.rewardShare,
-    params.liquidityShare,
-    params.burnShare,
-    params.fundShare,
-  ]);
+  }, [params]);
 
   // 参数变化时清空旧的挖盐结果
   const paramsKey = useMemo(
@@ -410,13 +403,6 @@ export default function SnowballLaunch() {
     return "";
   }, [deployMode, liquidityBnb, liquidityTokenPercent]);
 
-  const canCreate = useMemo(() => {
-    if (!isConnected) return false;
-    if (!params.name || !params.symbol || !params.totalSupply || !params.receiver) return false;
-    if (shareError || taxError || launchParamError) return false;
-    return true;
-  }, [isConnected, params, shareError, taxError, launchParamError]);
-
   const totalSupplyBigint = useMemo(() => {
     try {
       return ethers.parseUnits(params.totalSupply || "0", 18);
@@ -424,6 +410,20 @@ export default function SnowballLaunch() {
       return 0n;
     }
   }, [params.totalSupply]);
+
+  const canCreate = useMemo(() => {
+    if (!isConnected) return false;
+    if (!params.name || !params.symbol || !params.totalSupply || !params.receiver) return false;
+    if (!ethers.isAddress(params.receiver)) return false;
+    if (params.fundAddress && !ethers.isAddress(params.fundAddress)) return false;
+    if (params.rewardToken && !ethers.isAddress(params.rewardToken)) return false;
+    if (params.currency && !ethers.isAddress(params.currency)) return false;
+    if (totalSupplyBigint <= 0n) return false;
+    if (params.lpBurnFrequency < 3600 || params.percentForLPBurn < 1 || params.percentForLPBurn > 100) return false;
+    if (params.killBlocks < 0 || params.killBlocks > 100 || params.airdropNumbs < 0 || params.airdropNumbs > 3) return false;
+    if (shareError || taxError || launchParamError) return false;
+    return true;
+  }, [isConnected, params, shareError, taxError, launchParamError, totalSupplyBigint]);
 
   const liquidityTokens = useMemo(() => {
     if (deployMode !== "launch" || !totalSupplyBigint) return 0n;
@@ -450,7 +450,7 @@ export default function SnowballLaunch() {
       const built = await buildContractParams(params, deployMode === "launch");
       const suffix = factoryInfo.requiredSuffix && factoryInfo.requiredSuffix !== "0" ? factoryInfo.requiredSuffix : "7777";
       // 优先服务端挖盐（算力快），失败回退本地
-      showToast("尝试服务端挖盐…", "info");
+      showToast(SNOWBALL_API_BASE ? "尝试服务端挖盐…" : "正在本地挖盐…", "info");
       const serverRes = await serverMineSalt(built, suffix);
       if (serverRes) {
         setMineResult(serverRes);
@@ -481,6 +481,14 @@ export default function SnowballLaunch() {
     if (!signer || !factoryInfo || !canCreate || !mineResult) return;
     setCreating(true);
     try {
+      const requiredValue = BigInt(factoryInfo.createFee) +
+        (deployMode === "launch" ? ethers.parseEther(liquidityBnb) : 0n);
+      const signerProvider = signer.provider;
+      if (!signerProvider) throw new Error("钱包 Provider 不可用，请重新连接钱包");
+      const walletBalance = await signerProvider.getBalance(await signer.getAddress());
+      if (walletBalance < requiredValue) {
+        throw new Error(`余额不足：至少需要 ${ethers.formatEther(requiredValue)} BNB，另需预留 Gas`);
+      }
       let res;
       if (deployMode === "launch") {
         const bnbWei = ethers.parseEther(liquidityBnb).toString();
@@ -562,10 +570,14 @@ export default function SnowballLaunch() {
 
   const handleShareChange = (key: keyof SnowballParams, value: number) => {
     setParams((p) => {
-      const next = { ...p, [key]: value };
-      const { rewardShare, liquidityShare, burnShare } = next;
-      const remaining = BPS - rewardShare - liquidityShare - burnShare;
-      next.fundShare = Math.max(0, remaining);
+      if (key === "fundShare") return p;
+      const adjustableKeys = ["rewardShare", "liquidityShare", "burnShare"] as const;
+      const otherTotal = adjustableKeys
+        .filter((item) => item !== key)
+        .reduce((sum, item) => sum + p[item], 0);
+      const clamped = Math.max(0, Math.min(value, BPS - otherTotal));
+      const next = { ...p, [key]: clamped };
+      next.fundShare = BPS - next.rewardShare - next.liquidityShare - next.burnShare;
       return next;
     });
   };
@@ -639,7 +651,7 @@ export default function SnowballLaunch() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:w-[420px]">
+          <div className="grid grid-cols-2 gap-3 lg:w-[460px]">
             {[
               {
                 label: "创建费",
@@ -650,6 +662,7 @@ export default function SnowballLaunch() {
                 value: factoryInfo ? (factoryInfo.requiredSuffix === "0" ? "无" : factoryInfo.requiredSuffix) : "--",
               },
               { label: "分红代币", value: "USDT" },
+              { label: "平台收款", value: factoryInfo ? shorten(factoryInfo.feeRecipient) : "--" },
             ].map((item) => (
               <div
                 key={item.label}
@@ -845,7 +858,8 @@ export default function SnowballLaunch() {
                   min={0}
                   max={BPS}
                   step={100}
-                  hint="自动承接剩余比例"
+                  disabled
+                  hint="自动承接前三项分配后的剩余比例"
                 />
               </div>
             </div>
@@ -919,12 +933,12 @@ export default function SnowballLaunch() {
                 suffix="枚"
               />
               <InputGroup
-                label="开盘延迟"
+                label="二级白名单保护时长"
                 value={params.secondTime}
                 onChange={(v) => setParams((p) => ({ ...p, secondTime: Number(v) }))}
                 type="number"
                 suffix="秒"
-                hint="创建后多久可交易"
+                hint="开盘后的二级白名单保护窗口，不是延迟开盘"
               />
               <InputGroup
                 label="空投份数"
@@ -1159,7 +1173,9 @@ export default function SnowballLaunch() {
             </div>
             <p className="mb-4 mt-2 flex items-start gap-1.5 text-xs text-[var(--sb-muted)]">
               <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--sb-gold)]" />
-              服务端自动开源监控已启动：代币创建后会自动向 BscScan 提交源码验证，可在链上查看验证状态。
+              {SNOWBALL_API_BASE
+                ? "自动开源服务已配置，后端会监听创建记录并提交 BscScan 验证。"
+                : "当前未配置自动开源后端；代币创建不受影响，但源码验证需单独部署后端服务。"}
             </p>
             {deployMode === "deploy" && (
               <button

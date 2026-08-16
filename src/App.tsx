@@ -1,4 +1,5 @@
 import SnowballLaunch from "@/pages/SnowballLaunch";
+import TokenManager from "@/components/TokenManager";
 import { useAppStore } from "@/store";
 import { X } from "lucide-react";
 
@@ -28,6 +29,7 @@ export default function App() {
   return (
     <>
       <SnowballLaunch />
+      <TokenManager />
       <Toast />
     </>
   );

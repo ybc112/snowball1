@@ -395,6 +395,13 @@ export default function SnowballLaunch() {
     return "";
   }, [params.totalBuyTax, params.totalSellTax]);
 
+  const rewardTokenError = useMemo(() => {
+    if (params.rewardShare === 0) return "";
+    if (!params.rewardToken) return "启用分红时必须填写分红币合约地址";
+    if (!ethers.isAddress(params.rewardToken)) return "请输入有效的分红币合约地址";
+    return "";
+  }, [params.rewardShare, params.rewardToken]);
+
   const launchParamError = useMemo(() => {
     if (deployMode !== "launch") return "";
     const bnb = Number(liquidityBnb);
@@ -416,14 +423,14 @@ export default function SnowballLaunch() {
     if (!params.name || !params.symbol || !params.totalSupply || !params.receiver) return false;
     if (!ethers.isAddress(params.receiver)) return false;
     if (params.fundAddress && !ethers.isAddress(params.fundAddress)) return false;
-    if (params.rewardToken && !ethers.isAddress(params.rewardToken)) return false;
+    if (rewardTokenError) return false;
     if (params.currency && !ethers.isAddress(params.currency)) return false;
     if (totalSupplyBigint <= 0n) return false;
     if (params.lpBurnFrequency < 3600 || params.percentForLPBurn < 1 || params.percentForLPBurn > 100) return false;
     if (params.killBlocks < 0 || params.killBlocks > 100 || params.airdropNumbs < 0 || params.airdropNumbs > 3) return false;
-    if (shareError || taxError || launchParamError) return false;
+    if (shareError || taxError || rewardTokenError || launchParamError) return false;
     return true;
-  }, [isConnected, params, shareError, taxError, launchParamError, totalSupplyBigint]);
+  }, [isConnected, params, shareError, taxError, rewardTokenError, launchParamError, totalSupplyBigint]);
 
   const liquidityTokens = useMemo(() => {
     if (deployMode !== "launch" || !totalSupplyBigint) return 0n;
@@ -441,20 +448,47 @@ export default function SnowballLaunch() {
     return Number(bnb) / Number(liquidityTokens);
   }, [deployMode, liquidityTokens, liquidityBnb]);
 
-  const handleMine = async () => {
-    if (!factoryInfo || !canCreate) return;
+  const getCreateValidationError = () => {
+    if (!isConnected || !signer) return "请先连接钱包";
+    if (!factoryInfo) return factoryStatus === "loading" ? "Factory 信息仍在读取，请稍候" : "Factory 连接失败，请刷新后重试";
+    if (!params.name.trim()) return "请填写代币名称";
+    if (!params.symbol.trim()) return "请填写代币符号";
+    if (totalSupplyBigint <= 0n) return "请填写有效的代币总供应量";
+    if (!ethers.isAddress(params.receiver)) return "请填写有效的项目方收款地址";
+    if (params.fundAddress && !ethers.isAddress(params.fundAddress)) return "请填写有效的基金/营销地址";
+    if (rewardTokenError) return rewardTokenError;
+    if (params.currency && !ethers.isAddress(params.currency)) return "交易对币地址无效";
+    if (taxError) return taxError;
+    if (shareError) return shareError;
+    if (launchParamError) return launchParamError;
+    if (params.lpBurnFrequency < 3600) return "燃烧间隔不能低于 3600 秒";
+    if (params.percentForLPBurn < 1 || params.percentForLPBurn > 100) return "每次燃烧比例需在 0.01% ~ 1% 之间";
+    if (params.killBlocks < 0 || params.killBlocks > 100) return "杀区块数需在 0 ~ 100 之间";
+    if (params.airdropNumbs < 0 || params.airdropNumbs > 3) return "空投份数需在 0 ~ 3 之间";
+    return "";
+  };
+
+  const handleMine = async (): Promise<{ salt: string; address: string; attempts: number } | null> => {
+    const validationError = getCreateValidationError();
+    if (validationError) {
+      showToast(validationError, "error");
+      return null;
+    }
+    const activeFactoryInfo = factoryInfo;
+    if (!activeFactoryInfo) return null;
     setMining(true);
     setMineResult(null);
     abortRef.current = new AbortController();
     try {
       const built = await buildContractParams(params, deployMode === "launch");
-      const suffix = factoryInfo.requiredSuffix && factoryInfo.requiredSuffix !== "0" ? factoryInfo.requiredSuffix : "7777";
+      const suffix = activeFactoryInfo.requiredSuffix && activeFactoryInfo.requiredSuffix !== "0" ? activeFactoryInfo.requiredSuffix : "7777";
       // 优先服务端挖盐（算力快），失败回退本地
       showToast(SNOWBALL_API_BASE ? "尝试服务端挖盐…" : "正在本地挖盐…", "info");
       const serverRes = await serverMineSalt(built, suffix);
       if (serverRes) {
         setMineResult(serverRes);
         showToast(`服务端靓号挖到：${shorten(serverRes.address)}（${serverRes.attempts.toLocaleString()} 次）`, "success");
+        return serverRes;
       } else {
         const provider = getReadProvider();
         const factory = new ethers.Contract(FACTORY_ADDRESS, FACTORY_ABI, provider);
@@ -468,9 +502,11 @@ export default function SnowballLaunch() {
         );
         setMineResult(res);
         showToast(`靓号挖到：${shorten(res.address)}`, "success");
+        return res;
       }
     } catch (e: any) {
       showToast(e.message || "挖盐失败", "error");
+      return null;
     } finally {
       setMining(false);
       abortRef.current = null;
@@ -478,7 +514,14 @@ export default function SnowballLaunch() {
   };
 
   const handleCreate = async () => {
-    if (!signer || !factoryInfo || !canCreate || !mineResult) return;
+    const validationError = getCreateValidationError();
+    if (validationError) {
+      showToast(validationError, "error");
+      return;
+    }
+
+    const activeMineResult = mineResult || await handleMine();
+    if (!signer || !factoryInfo || !activeMineResult) return;
     setCreating(true);
     try {
       const requiredValue = BigInt(factoryInfo.createFee) +
@@ -495,13 +538,13 @@ export default function SnowballLaunch() {
         res = await createTokenAndAddLiquidity(
           signer,
           params,
-          mineResult.salt,
+          activeMineResult.salt,
           factoryInfo.createFee,
           liquidityTokens.toString(),
           bnbWei
         );
       } else {
-        res = await createToken(signer, params, mineResult.salt, factoryInfo.createFee);
+        res = await createToken(signer, params, activeMineResult.salt, factoryInfo.createFee);
       }
       setResult({ tokenAddress: res.tokenAddress, txHash: res.txHash });
       showToast("代币创建成功", "success");
@@ -661,7 +704,15 @@ export default function SnowballLaunch() {
                 label: "靓号后缀",
                 value: factoryInfo ? (factoryInfo.requiredSuffix === "0" ? "无" : factoryInfo.requiredSuffix) : "--",
               },
-              { label: "分红代币", value: "USDT" },
+              {
+                label: "分红代币",
+                value:
+                  params.rewardToken.toLowerCase() === ADDRESSES.usdt.toLowerCase()
+                    ? "USDT"
+                    : params.rewardToken.toLowerCase() === ADDRESSES.wbnb.toLowerCase()
+                      ? "WBNB"
+                      : shorten(params.rewardToken),
+              },
               { label: "平台收款", value: factoryInfo ? shorten(factoryInfo.feeRecipient) : "--" },
             ].map((item) => (
               <div
@@ -801,6 +852,33 @@ export default function SnowballLaunch() {
 
           <Card title="交易税配置" icon={Droplets} number="03">
             {taxError && <p className="mb-4 text-sm text-[var(--sb-red)]">{taxError}</p>}
+            <div className="mb-6 rounded-xl border border-[var(--sb-border)] bg-white/70 p-4">
+              <InputGroup
+                label="分红币合约地址"
+                value={params.rewardToken}
+                onChange={(v) => setParams((p) => ({ ...p, rewardToken: v.trim() }))}
+                placeholder={ADDRESSES.usdt}
+                error={rewardTokenError}
+                hint="分红税会兑换为该 ERC-20 代币并分配给符合条件的持币地址；填写 0x 地址，不是分红追踪器地址。"
+              />
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-[var(--sb-muted)]">快捷选择：</span>
+                <button
+                  type="button"
+                  onClick={() => setParams((p) => ({ ...p, rewardToken: ADDRESSES.usdt }))}
+                  className="rounded-lg border border-[var(--sb-border)] px-2.5 py-1 font-medium text-[var(--sb-text)] transition hover:border-[var(--sb-gold)]"
+                >
+                  BSC-USDT
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setParams((p) => ({ ...p, rewardToken: ADDRESSES.wbnb }))}
+                  className="rounded-lg border border-[var(--sb-border)] px-2.5 py-1 font-medium text-[var(--sb-text)] transition hover:border-[var(--sb-gold)]"
+                >
+                  WBNB
+                </button>
+              </div>
+            </div>
             <div className="grid gap-6 md:grid-cols-2">
               <SliderGroup
                 label="买入税率"
@@ -1125,14 +1203,14 @@ export default function SnowballLaunch() {
           <div className="space-y-3">
             <button
               onClick={handleCreate}
-              disabled={creating || !canCreate || !mineResult}
+              disabled={creating || mining}
               className={cn(
                 "flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--sb-text)] py-3 text-sm font-bold text-white transition hover:bg-[var(--sb-text)]/90",
-                (creating || !canCreate || !mineResult) && "cursor-not-allowed opacity-60"
+                (creating || mining) && "cursor-not-allowed opacity-60"
               )}
             >
-              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
-              {deployMode === "launch" ? "创建并加池开盘" : "仅创建代币"}
+              {creating || mining ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
+              {mining ? "正在准备靓号地址..." : creating ? "等待钱包确认..." : deployMode === "launch" ? "创建并加池开盘" : "仅创建代币"}
             </button>
             <p className="text-center text-xs text-[var(--sb-muted)]">
               {deployMode === "launch"

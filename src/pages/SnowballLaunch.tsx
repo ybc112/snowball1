@@ -323,6 +323,7 @@ export default function SnowballLaunch() {
   // 开盘管理
   const [launching, setLaunching] = useState(false);
   const [manageToken, setManageToken] = useState("");
+  const [vanitySuffix, setVanitySuffix] = useState("7777");
   const [manageInfo, setManageInfo] = useState<{ owner: string; launched: boolean } | null>(null);
 
   const [creating, setCreating] = useState(false);
@@ -481,7 +482,15 @@ export default function SnowballLaunch() {
     abortRef.current = new AbortController();
     try {
       const built = await buildContractParams(params, deployMode === "launch");
-      const suffix = activeFactoryInfo.requiredSuffix && activeFactoryInfo.requiredSuffix !== "0" ? activeFactoryInfo.requiredSuffix : "7777";
+      // 靓号后缀：Factory 强制后缀优先，否则用用户填的（默认 7777）
+      const suffix = activeFactoryInfo.requiredSuffix && activeFactoryInfo.requiredSuffix !== "0"
+        ? activeFactoryInfo.requiredSuffix
+        : vanitySuffix.trim().toLowerCase() || "7777";
+      if (!/^[0-9a-f]{1,6}$/.test(suffix)) {
+        showToast("靓号后缀需为 1-6 位十六进制字符（0-9、a-f）", "error");
+        setMining(false);
+        return null;
+      }
       // 优先服务端挖盐（算力快），失败回退本地
       showToast(SNOWBALL_API_BASE ? "尝试服务端挖盐…" : "正在本地挖盐…", "info");
       const serverRes = await serverMineSalt(built, suffix);
@@ -713,7 +722,7 @@ export default function SnowballLaunch() {
                       ? "WBNB"
                       : shorten(params.rewardToken),
               },
-              { label: "平台收款", value: factoryInfo ? shorten(factoryInfo.feeRecipient) : "--" },
+              { label: "网络", value: "BSC 主网" },
             ].map((item) => (
               <div
                 key={item.label}
@@ -1121,6 +1130,13 @@ export default function SnowballLaunch() {
               <p className="text-sm text-[var(--sb-muted)]">
                 使用 CREATE2 离线预测地址，找到符合后缀的 salt 后再上链创建。模式或参数变化后需重新挖盐。
               </p>
+              <InputGroup
+                label="靓号后缀"
+                value={vanitySuffix}
+                onChange={setVanitySuffix}
+                placeholder="如 7777 / 8888 / abcd"
+                hint="1-6 位十六进制字符（0-9、a-f），留空默认 7777"
+              />
               <button
                 onClick={handleMine}
                 disabled={mining || !canCreate || !factoryInfo}

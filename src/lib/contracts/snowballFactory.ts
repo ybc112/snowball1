@@ -20,9 +20,6 @@ export const RPCS = [
   "https://bsc-dataseed1.bnbchain.org",
   "https://bsc-dataseed2.bnbchain.org",
   "https://bsc.publicnode.com",
-  "https://bsc-rpc.publicnode.com",
-  "https://1rpc.io/bnb",
-  "https://bsc.drpc.org",
 ];
 
 export const ADDRESSES = {
@@ -174,8 +171,16 @@ export interface BuiltParams {
 // provider 工厂
 // ─────────────────────────────────────────────────────────────────────────────
 export function getReadProvider() {
-  const providers = RPCS.map((url) => new ethers.JsonRpcProvider(url, CHAIN_ID));
-  return new ethers.FallbackProvider(providers, CHAIN_ID);
+  const providers = RPCS.map((url, index) => ({
+    provider: new ethers.JsonRpcProvider(url, CHAIN_ID, {
+      staticNetwork: true,
+      batchMaxCount: 1,
+    }),
+    priority: index + 1,
+    stallTimeout: 1500,
+    weight: 1,
+  }));
+  return new ethers.FallbackProvider(providers, CHAIN_ID, { quorum: 1 });
 }
 
 export function getFactoryContract(signerOrProvider: BrowserProvider | Signer | ethers.Provider = getReadProvider()) {
@@ -384,7 +389,7 @@ export async function getFactoryInfo() {
 // 雪球后端 API（服务器挖盐 + 自动开源，/root/snowball · pm2 snowball-backend）
 // ─────────────────────────────────────────────────────────────────────────────
 export const SNOWBALL_API_BASE =
-  (import.meta.env.VITE_SNOWBALL_API_URL || "").replace(/\/$/, "");
+  (import.meta.env.VITE_SNOWBALL_API_URL || "/snowball-api").replace(/\/$/, "");
 
 export async function serverMineSalt(
   params: BuiltParams,

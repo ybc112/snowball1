@@ -261,19 +261,29 @@ async function getDeployerAddress(factory: Contract): Promise<string> {
   return factory.tokenDeployer();
 }
 
-export async function computeTokenAddress(
-  factory: Contract,
-  params: BuiltParams,
-  salt: string
-): Promise<string> {
-  const deployerAddr = await getDeployerAddress(factory);
+function computeInitCodeHash(params: BuiltParams, bytecode: string): string {
   const abiCoder = ethers.AbiCoder.defaultAbiCoder();
   const encoded = abiCoder.encode(
     ["string[]", "address[]", "uint256[]", "bool[]", "uint256[]"],
     [params.stringParams, params.addressParams, params.numberParams, params.boolParams, []]
   );
-  const bytecode = (await getBananaTokenBytecode()) + encoded.slice(2);
-  const initHash = ethers.keccak256(bytecode);
+  return ethers.keccak256(bytecode + encoded.slice(2));
+}
+
+async function prepareAddressMiner(factory: Contract, params: BuiltParams) {
+  const [deployerAddr, bytecode] = await Promise.all([
+    getDeployerAddress(factory),
+    getBananaTokenBytecode(),
+  ]);
+  return { deployerAddr, initHash: computeInitCodeHash(params, bytecode) };
+}
+
+export async function computeTokenAddress(
+  factory: Contract,
+  params: BuiltParams,
+  salt: string
+): Promise<string> {
+  const { deployerAddr, initHash } = await prepareAddressMiner(factory, params);
   return ethers.getCreate2Address(deployerAddr, salt, initHash);
 }
 
@@ -295,13 +305,17 @@ export async function mineSalt(
     return { salt, address, attempts: 1 };
   }
 
+  const { deployerAddr, initHash } = await prepareAddressMiner(factory, params);
   let attempts = 0;
   while (true) {
     if (abortSignal?.aborted) throw new Error("已取消挖盐");
     const salt = ethers.hexlify(ethers.randomBytes(32));
-    const address = await computeTokenAddress(factory, params, salt);
+    const address = ethers.getCreate2Address(deployerAddr, salt, initHash);
     attempts++;
-    if (attempts % 100 === 0) onProgress?.(attempts, address);
+    if (attempts % 2_000 === 0) {
+      onProgress?.(attempts, address);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    }
     if (address.toLowerCase().endsWith(targetSuffix.toLowerCase())) {
       return { salt, address, attempts };
     }
@@ -394,7 +408,7 @@ export const SNOWBALL_API_BASE =
 export async function serverMineSalt(
   params: BuiltParams,
   suffix: string,
-  maxIterations = 50000
+  maxIterations = 300000
 ): Promise<{ salt: string; address: string; attempts: number } | null> {
   if (!SNOWBALL_API_BASE) return null;
   try {

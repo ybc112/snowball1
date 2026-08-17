@@ -39,15 +39,15 @@ export const FACTORY_ADDRESS =
 // ─────────────────────────────────────────────────────────────────────────────
 // TokenFactory ABI（对齐 flap-vault-ai-coder/contracts/tokenfactory/TokenFactory.sol）
 // ─────────────────────────────────────────────────────────────────────────────
+const LAUNCH_PARAMS_TUPLE = "(string name,string symbol,uint256 totalSupply,address receiver,address fundAddress,address rewardToken,address currency,uint256 totalBuyTax,uint256 totalSellTax,uint256 rewardShare,uint256 liquidityShare,uint256 burnShare,uint256 fundShare,uint256 maxBuyAmount,uint256 maxSellAmount,uint256 maxWalletAmount,uint256 secondTime,uint256 killBlocks,uint256 airdropNumbs,uint256 transferFee,uint256 mushHoldNum,uint256 lpBurnFrequency,uint256 percentForLPBurn,bool enableOffTrade)";
+
 export const FACTORY_ABI = [
-  // struct
-  "struct LaunchParams { string name; string symbol; uint256 totalSupply; address receiver; address fundAddress; address rewardToken; address currency; uint256 totalBuyTax; uint256 totalSellTax; uint256 rewardShare; uint256 liquidityShare; uint256 burnShare; uint256 fundShare; uint256 maxBuyAmount; uint256 maxSellAmount; uint256 maxWalletAmount; uint256 secondTime; uint256 killBlocks; uint256 airdropNumbs; uint256 transferFee; uint256 mushHoldNum; uint256 lpBurnFrequency; uint256 percentForLPBurn; bool enableOffTrade; }",
   // write
-  "function createToken(LaunchParams calldata params, bytes32 salt) external payable returns (address token)",
-  "function createTokenAndAddLiquidity(LaunchParams calldata params, bytes32 salt, uint256 addLiquidityTokens, uint256 addLiquidityEth) external payable returns (address token)",
+  `function createToken(${LAUNCH_PARAMS_TUPLE} params, bytes32 salt) payable returns (address token)`,
+  `function createTokenAndAddLiquidity(${LAUNCH_PARAMS_TUPLE} params, bytes32 salt, uint256 addLiquidityTokens, uint256 addLiquidityEth) payable returns (address token)`,
   // read / preview
-  "function previewFees(uint256 totalBuyTax, uint256 totalSellTax, uint256 rewardShare, uint256 liquidityShare, uint256 burnShare, uint256 fundShare) external pure returns (tuple(uint256 platformFee,uint256 rewardFee,uint256 liquidityFee,uint256 burnFee,uint256 fundFee) buy, tuple(uint256 platformFee,uint256 rewardFee,uint256 liquidityFee,uint256 burnFee,uint256 fundFee) sell)",
-  "function buildParams(LaunchParams calldata params, bool withLiquidity) external view returns (string[] memory, address[] memory, uint256[] memory, bool[] memory)",
+  "function previewFees(uint256 totalBuyTax, uint256 totalSellTax, uint256 rewardShare, uint256 liquidityShare, uint256 burnShare, uint256 fundShare) pure returns ((uint256 platformFee,uint256 rewardFee,uint256 liquidityFee,uint256 burnFee,uint256 fundFee) buy, (uint256 platformFee,uint256 rewardFee,uint256 liquidityFee,uint256 burnFee,uint256 fundFee) sell)",
+  `function buildParams(${LAUNCH_PARAMS_TUPLE} params, bool withLiquidity) view returns (string[], address[], uint256[], bool[])`,
   "function creationFee() external view returns (uint256)",
   "function DEFAULT_REWARD_TOKEN() external view returns (address)",
   "function feeRecipient() external view returns (address)",

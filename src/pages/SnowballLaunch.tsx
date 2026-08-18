@@ -797,7 +797,7 @@ export default function SnowballLaunch() {
               <InputGroup
                 label="代币符号"
                 value={params.symbol}
-                onChange={(v) => setParams((p) => ({ ...p, symbol: v.toUpperCase() }))}
+                onChange={(v) => setParams((p) => ({ ...p, symbol: v }))}
                 placeholder="如：SNOW"
               />
               <InputGroup

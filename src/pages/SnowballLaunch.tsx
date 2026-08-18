@@ -13,6 +13,7 @@ import {
   AlertCircle,
   ChevronRight,
   Sparkles,
+  TrendingUp,
   Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -651,6 +652,11 @@ export default function SnowballLaunch() {
             </div>
           </div>
 
+          <div className="flex items-center gap-2">
+          <a href="/trending" className="sb-wallet flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-bold" title="热搜代币榜">
+            <TrendingUp className="h-4 w-4" />
+            <span className="hidden md:inline">热搜榜</span>
+          </a>
           <button
             onClick={connect}
             disabled={connecting || isConnected}
@@ -665,6 +671,7 @@ export default function SnowballLaunch() {
             <span className="hidden sm:inline">{isConnected ? shorten(account!) : "连接钱包"}</span>
             <span className="sm:hidden">{isConnected ? shorten(account!) : "连接"}</span>
           </button>
+          </div>
         </div>
       </header>
 

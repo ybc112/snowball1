@@ -1,5 +1,6 @@
 import SnowballLaunch from "@/pages/SnowballLaunch";
 import TokenManager from "@/components/TokenManager";
+import TrendingTokens from "@/pages/TrendingTokens";
 import { useAppStore } from "@/store";
 import { X } from "lucide-react";
 
@@ -26,6 +27,9 @@ function Toast() {
 }
 
 export default function App() {
+  if (window.location.pathname === "/trending") {
+    return <TrendingTokens />;
+  }
   return (
     <>
       <SnowballLaunch />

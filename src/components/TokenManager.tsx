@@ -29,6 +29,15 @@ function parseAddresses(value: string) {
   return addresses;
 }
 
+function parsePercentBps(value: string): bigint {
+  const raw = value.trim();
+  if (!/^\d+(\.\d{1,2})?$/.test(raw)) {
+    throw new Error("百分比格式无效，最多保留两位小数");
+  }
+  const [whole, fraction = ""] = raw.split(".");
+  return BigInt(whole) * 100n + BigInt((fraction + "00").slice(0, 2));
+}
+
 export default function TokenManager() {
   const { signer, account, isConnected } = useWallet();
   const showToast = useAppStore((state) => state.showToast);
@@ -62,9 +71,9 @@ export default function TokenManager() {
         lpBurnFrequency: values[14], percentForLPBurn: values[15], minimumDividend: values[16],
       };
       setInfo(next);
-      setFees(next.fees.map(String));
+      setFees(next.fees.map((value) => (Number(value) / 100).toFixed(2)));
       setFundAddress(next.fundAddress);
-      setLpBurn({ frequency: String(next.lpBurnFrequency), percent: String(next.percentForLPBurn) });
+      setLpBurn({ frequency: String(next.lpBurnFrequency), percent: (Number(next.percentForLPBurn) / 100).toFixed(2) });
       setMinimumDividend(ethers.formatUnits(next.minimumDividend, 18));
       showToast("代币配置读取成功", "success");
     } catch (error: any) {
@@ -97,7 +106,12 @@ export default function TokenManager() {
   };
 
   const updateFees = () => {
-    const values = fees.map((value) => BigInt(value || "0"));
+    let values: bigint[];
+    try {
+      values = fees.map((value) => parsePercentBps(value || "0"));
+    } catch (error: any) {
+      return showToast(error.message, "error");
+    }
     const buyTotal = values.slice(0, 4).reduce((sum, value) => sum + value, 0n);
     const sellTotal = values.slice(4).reduce((sum, value) => sum + value, 0n);
     if (!info || values[0] < info.buyPlatformFee || values[4] < info.sellPlatformFee) {
@@ -135,11 +149,11 @@ export default function TokenManager() {
             </div>
 
             <div>
-              <h3 className="mb-3 text-sm font-bold">买卖税设置（bps，100 = 1%）</h3>
+              <h3 className="mb-3 text-sm font-bold">买卖税设置（百分比）</h3>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {["买 Fund", "买回流", "买分红", "买燃烧", "卖 Fund", "卖回流", "卖分红", "卖燃烧"].map((label, index) => (
                   <label key={label} className="text-xs text-[var(--sb-muted)]">{label}
-                    <input className={`${FIELD_CLASS} mt-1`} type="number" min="0" value={fees[index]} onChange={(event) => setFees((current) => current.map((item, i) => i === index ? event.target.value : item))} />
+                    <input className={`${FIELD_CLASS} mt-1`} type="number" min="0" step="0.01" value={fees[index]} onChange={(event) => setFees((current) => current.map((item, i) => i === index ? event.target.value : item))} />
                   </label>
                 ))}
               </div>
@@ -175,8 +189,8 @@ export default function TokenManager() {
                 <input className={FIELD_CLASS} value={minimumDividend} onChange={(e) => setMinimumDividend(e.target.value)} placeholder="最低持仓分红枚数" />
                 <button onClick={() => void execute("minimum", "更新分红门槛", (t) => t.updateMinimumTokenBalanceForDividends(ethers.parseUnits(minimumDividend || "0", 18)))} className="rounded-lg border px-3 py-2 text-xs font-bold">更新分红门槛</button>
                 <input className={FIELD_CLASS} type="number" value={lpBurn.frequency} onChange={(e) => setLpBurn((v) => ({ ...v, frequency: e.target.value }))} placeholder="燃烧间隔秒数（最少 3600）" />
-                <input className={FIELD_CLASS} type="number" value={lpBurn.percent} onChange={(e) => setLpBurn((v) => ({ ...v, percent: e.target.value }))} placeholder="每次燃烧 bps（最大 100）" />
-                <div className="flex gap-2"><button onClick={() => void execute("frequency", "更新燃烧间隔", (t) => t.setlpBurnFrequency(BigInt(lpBurn.frequency)))} className="rounded-lg border px-3 py-2 text-xs font-bold">保存间隔</button><button onClick={() => void execute("percent", "更新燃烧比例", (t) => t.setpercentForLPBurn(BigInt(lpBurn.percent)))} className="rounded-lg border px-3 py-2 text-xs font-bold">保存比例</button></div>
+                <input className={FIELD_CLASS} type="number" min="0" max="1" step="0.01" value={lpBurn.percent} onChange={(e) => setLpBurn((v) => ({ ...v, percent: e.target.value }))} placeholder="每次燃烧百分比（最大 1%）" />
+                <div className="flex gap-2"><button onClick={() => void execute("frequency", "更新燃烧间隔", (t) => t.setlpBurnFrequency(BigInt(lpBurn.frequency)))} className="rounded-lg border px-3 py-2 text-xs font-bold">保存间隔</button><button onClick={() => { try { const value = parsePercentBps(lpBurn.percent); if (value > 100n) throw new Error("每次 LP 燃烧最多 1%"); void execute("percent", "更新燃烧比例", (t) => t.setpercentForLPBurn(value)); } catch (error: any) { showToast(error.message, "error"); } }} className="rounded-lg border px-3 py-2 text-xs font-bold">保存比例</button></div>
               </div>
 
               <div className="space-y-2"><h3 className="text-sm font-bold">开盘保护与交易参数</h3>

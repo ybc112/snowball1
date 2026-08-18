@@ -637,17 +637,17 @@ export default function SnowballLaunch() {
   return (
     <div className="min-h-screen overflow-x-hidden bg-[var(--sb-bg)] pb-24">
       {/* Header */}
-      <header className="sticky top-0 z-30 border-b border-[var(--sb-border)] bg-white/80 backdrop-blur">
+      <header className="sb-brand-header sticky top-0 z-30 border-b backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-3">
             <img
               src="/logo.jpg"
-              alt="logo"
-              className="h-10 w-10 shrink-0 rounded-xl border border-[var(--sb-gold)]/30 object-cover shadow-md shadow-[var(--sb-gold)]/30"
+              alt="Burn Monkey logo"
+              className="h-11 w-11 shrink-0 rounded-xl border border-orange-300/50 object-cover shadow-lg shadow-orange-950/60"
             />
             <div className="min-w-0">
-              <h1 className="text-base font-bold leading-tight text-[var(--sb-text)] md:text-lg">燃烧发射台</h1>
-              <p className="hidden text-xs text-[var(--sb-muted)] sm:block">LP 单边燃烧 · 自动回流 · 持币分红</p>
+              <h1 className="sb-brand-title text-base font-bold leading-tight md:text-lg">燃烧发射台 <span className="ml-1 text-[10px] font-black tracking-[0.22em] text-orange-300">BURN MONKEY</span></h1>
+              <p className="sb-brand-subtitle hidden text-xs sm:block">LP 单边燃烧 · 自动回流 · 持币分红</p>
             </div>
           </div>
 
@@ -655,10 +655,10 @@ export default function SnowballLaunch() {
             onClick={connect}
             disabled={connecting || isConnected}
             className={cn(
-              "flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition md:px-4",
-              isConnected
-                ? "border border-[var(--sb-border)] bg-white text-[var(--sb-text)]"
-                : "bg-[var(--sb-text)] text-white hover:bg-[var(--sb-text)]/90"
+                "sb-wallet flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition md:px-4",
+                isConnected
+                ? ""
+                : "sb-wallet-idle hover:bg-orange-600"
             )}
           >
             {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
@@ -670,7 +670,7 @@ export default function SnowballLaunch() {
 
       {/* Hero / status strip（Mint 风格） */}
       <section className="mx-auto max-w-6xl px-4 pb-6 pt-8">
-        <div className="flex flex-col gap-5 rounded-3xl border border-[var(--sb-border)] bg-[var(--sb-card)] p-6 shadow-sm lg:flex-row lg:items-center">
+        <div className="sb-brand-hero flex flex-col gap-5 p-6 lg:flex-row lg:items-center">
           <div className="flex items-start gap-4 lg:flex-1">
             <div
               className={cn(
@@ -680,16 +680,14 @@ export default function SnowballLaunch() {
             />
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <Rocket className="h-5 w-5 text-[var(--sb-gold)]" />
-                <h2 className="text-2xl font-black tracking-tight text-[var(--sb-text)] lg:text-3xl">燃烧发射台</h2>
-                <span className="rounded-md bg-[var(--sb-gold-light)] px-2 py-0.5 text-[10px] font-bold text-[var(--sb-gold)]">
-                  LAUNCH
-                </span>
+                <span className="sb-flame-mark h-9 w-9"><Flame className="h-5 w-5" /></span>
+                <h2 className="sb-hero-title text-2xl font-black tracking-tight lg:text-3xl">燃烧发射台</h2>
+                <span className="rounded-md bg-orange-200/20 px-2 py-0.5 text-[10px] font-bold text-orange-200">BURN / LAUNCH</span>
               </div>
-              <p className="mt-1.5 text-sm text-[var(--sb-muted)]">
+              <p className="sb-hero-copy mt-1.5 text-sm">
                 一键创建带 LP 单边燃烧机制的 meme 币：自动烧池、自动回流、持币分红
               </p>
-              <p className="mt-1 text-xs text-[var(--sb-muted)]">
+              <p className="sb-hero-meta mt-1 text-xs">
                 {isConnected
                   ? `${shorten(account!)} · Factory ${shorten(FACTORY_ADDRESS)}`
                   : "连接钱包后会自动填入创建者接收地址"}
@@ -726,10 +724,10 @@ export default function SnowballLaunch() {
             ].map((item) => (
               <div
                 key={item.label}
-                className="rounded-xl border border-[var(--sb-border)] bg-[var(--sb-bg)]/60 p-3 text-center transition-colors hover:border-[var(--sb-gold)]/40"
+                className="sb-hero-stat rounded-xl border p-3 text-center transition-colors hover:border-orange-200/60"
               >
-                <div className="text-xs text-[var(--sb-muted)]">{item.label}</div>
-                <div className="mt-1 text-sm font-bold text-[var(--sb-text)]">{item.value}</div>
+                <div className="sb-hero-stat-label text-xs">{item.label}</div>
+                <div className="sb-hero-stat-value mt-1 text-sm font-bold">{item.value}</div>
               </div>
             ))}
           </div>

@@ -26,6 +26,57 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Burn Monkey brand layer */
+.sb-brand-header {
+  background: #1d0d08;
+  border-color: rgba(240, 105, 50, 0.35);
+  box-shadow: 0 8px 24px rgba(80, 20, 8, 0.14);
+}
+
+.sb-brand-header .sb-brand-title { color: #fff; }
+.sb-brand-header .sb-brand-subtitle { color: rgba(255, 226, 213, 0.72); }
+.sb-brand-header .sb-wallet { border-color: rgba(255, 214, 190, 0.28); background: rgba(255, 255, 255, 0.08); color: #fff; }
+.sb-brand-header .sb-wallet-idle { background: #f05a32; color: #fff; }
+
+.sb-brand-hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  min-height: 270px;
+  border: 1px solid rgba(240, 105, 50, 0.36);
+  border-radius: 28px;
+  background-color: #35140c;
+  background-image: url('/logo.jpg');
+  background-position: center 42%;
+  background-size: cover;
+  box-shadow: 0 18px 48px rgba(88, 24, 9, 0.2);
+}
+
+.sb-brand-hero::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgba(24, 8, 5, 0.66);
+  content: "";
+}
+
+.sb-brand-hero .sb-hero-title { color: #fff; text-shadow: 0 2px 16px rgba(0, 0, 0, 0.35); }
+.sb-brand-hero .sb-hero-copy { color: rgba(255, 237, 228, 0.82); }
+.sb-brand-hero .sb-hero-meta { color: rgba(255, 220, 207, 0.68); }
+.sb-brand-hero .sb-hero-stat { border-color: rgba(255, 224, 210, 0.25); background: rgba(20, 7, 4, 0.42); }
+.sb-brand-hero .sb-hero-stat-label { color: rgba(255, 220, 207, 0.7); }
+.sb-brand-hero .sb-hero-stat-value { color: #fff; }
+
+.sb-flame-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #f05a32;
+  color: #fff;
+  box-shadow: 0 0 0 6px rgba(240, 90, 50, 0.14), 0 8px 20px rgba(240, 90, 50, 0.32);
+}
+
 /* custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
